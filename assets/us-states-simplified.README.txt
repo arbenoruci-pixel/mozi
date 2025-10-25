@@ -1,0 +1,2 @@
+Place a simplified US states GeoJSON here named 'us-states-simplified.geo.json' with state abbreviations under properties.abbr or STUSPS.
+It should be WGS84 (EPSG:4326).

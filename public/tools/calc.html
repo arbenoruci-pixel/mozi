@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Smart Freight — Lane Profit Calculator</title>
+<style>
+  body{background:#0b0b0b;color:#eee;font-family:sans-serif;margin:0}
+  header{padding:12px 16px;border-bottom:1px solid #222}
+  .wrap{max-width:900px;margin:0 auto;padding:16px}
+  input, select{width:100%;padding:10px;border-radius:8px;border:1px solid #333;background:#101010;color:#fff}
+  label{font-size:12px;color:#aaa}
+  .row{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px}
+  @media(max-width:900px){.row{grid-template-columns:1fr 1fr}}
+  button{background:#151515;color:#0af;border:1px solid #2c2c2c;border-radius:8px;padding:10px 14px;cursor:pointer;margin-top:8px}
+  .panel{background:#101010;border:1px solid #2a2a2a;border-radius:10px;padding:12px;margin-top:12px}
+  .big{font-size:22px;font-weight:700}
+  .bucket{font-weight:700}.b300{color:#0f0}.b150{color:#fa0}.b80{color:#9cf}.bpass{color:#f33}
+  details{margin-top:10px}
+  summary{cursor:pointer;color:#9aa}
+  .muted{color:#aaa;font-size:12px}
+  .line{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed #222}
+  .line:last-child{border-bottom:none}
+</style>
+
+<!-- Google Maps JS (Distance Matrix) -->
+<script>
+  const GOOGLE_MAPS_KEY = 'AIzaSyAzYDKjl8bMWYREsqvKV9OWPMlvv1fRKSw';
+  window._gmapsReady = false;
+  window.initGmaps = function(){ window._gmapsReady = true; };
+  (function loadGMaps(){
+    const s = document.createElement('script');
+    s.src = 'https://maps.googleapis.com/maps/api/js?key='
+            + encodeURIComponent(GOOGLE_MAPS_KEY)
+            + '&callback=initGmaps';
+    s.async = true; s.defer = true;
+    document.head.appendChild(s);
+  })();
+</script>
+</head>
+<body>
+<header><a href="/" style="color:#0af;text-decoration:none">← Home</a></header>
+
+<div class="wrap">
+  <h2>Lane Profit Calculator</h2>
+
+  <div class="row">
+    <div><label>Pickup</label><input id="pickup" placeholder="City, ST"></div>
+    <div><label>Delivery</label><input id="delivery" placeholder="City, ST"></div>
+    <div><label>Broker Pay (Gross $)</label><input id="pay" type="number" step="1" placeholder="e.g. 3000"></div>
+    <div><label>Carrier $</label><input id="carrier" type="number" step="1" value="0"></div>
+  </div>
+
+  <div class="row">
+    <div>
+      <label>Miles</label>
+      <input id="miles" type="number" step="1" placeholder="auto or manual">
+    </div>
+    <div>
+      <label style="display:block;height:14px"></label>
+      <label style="font-size:12px;color:#aaa"><input id="rtCalc" type="checkbox" checked> Round trip</label>
+      <button id="btnMiles" type="button" disabled>Get Miles</button>
+    </div>
+    <div><label>Notes</label><input id="notes" placeholder="optional"></div>
+  </div>
+
+  <div class="panel" style="margin-top:12px">
+    <div class="row">
+      <div>
+        <label>Market RPM avg ($/mi)</label>
+        <input id="marketRpm" type="number" step="0.05" value="2.00">
+      </div>
+      <div>
+        <label>Market mode</label>
+        <select id="marketMode">
+          <option value="soft">Soft (more trucks)</option>
+          <option value="neutral" selected>Neutral</option>
+          <option value="hot">Hot (tight capacity)</option>
+        </select>
+      </div>
+      <div>
+        <label>Targets (your net)</label>
+        <input id="targets" value="60,150,300" />
+      </div>
+    </div>
+    <div id="suggestions" class="muted" style="margin-top:8px">
+      Enter Gross and press Calculate to see options.
+    </div>
+  </div>
+
+  <button id="calc">Calculate</button>
+
+  <div class="panel" id="out">
+    <div class="muted">Enter values and press Calculate.</div>
+  </div>
+</div>
+
+<script>
+/* --- Google Distance helper: returns one-way miles --- */
+function getOneWayMiles(pickup, delivery){
+  return new Promise((resolve,reject)=>{
+    if(!window._gmapsReady || !window.google || !google.maps){
+      return reject('Google not loaded yet');
+    }
+    const svc = new google.maps.DistanceMatrixService();
+    svc.getDistanceMatrix({
+      origins: [pickup],
+      destinations: [delivery],
+      travelMode: google.maps.TravelMode.DRIVING,
+      unitSystem: google.maps.UnitSystem.IMPERIAL
+    }, (res, status)=>{
+      if(status !== 'OK') return reject(status||'Unknown error');
+      const el = res?.rows?.[0]?.elements?.[0];
+      if(!el || el.status !== 'OK') return reject(el?.status || 'No route');
+      resolve(el.distance.value / 1609.34); // meters -> miles
+    });
+  });
+}
+
+// enable button when Google is ready
+const btn = document.getElementById('btnMiles');
+const iv = setInterval(()=>{ if(window._gmapsReady){ btn.disabled=false; clearInterval(iv);} },200);
+
+btn.onclick = async () => {
+  const pickup = (document.getElementById('pickup').value||'').trim();
+  const delivery = (document.getElementById('delivery').value||'').trim();
+  if(!pickup || !delivery){ alert('Enter Pickup and Delivery first.'); return; }
+  try{
+    const oneWay = await getOneWayMiles(pickup, delivery);
+    const roundTrip = document.getElementById('rtCalc').checked;
+    document.getElementById('miles').value = Math.round(oneWay * (roundTrip?2:1));
+  }catch(e){
+    alert('Miles lookup failed: '+e+'\n\nCheck: Maps JavaScript API + Distance Matrix API enabled, billing active, and referrer allows your domain.');
+  }
+};
+
+/* ================= CORE LOGIC (BROKER MODEL) ================= */
+function bucket(n){
+  if(n>=300) return ['KEEP 300','b300'];
+  if(n>=150) return ['KEEP 150','b150'];
+  if(n>= 80) return ['KEEP 80','b80'];
+  return ['PASS','bpass'];
+}
+function compute({ gross, carrier=0 }){
+  const ws = Math.max(0, gross * 0.10);
+  const profitPool = (gross - ws) - carrier;
+  const narta = Math.max(0, profitPool * 0.80);
+  const lex   = Math.max(0, profitPool * 0.20);
+  return { ws, profitPool, narta, lex };
+}
+document.getElementById('calc').onclick = () => {
+  const gross   = +document.getElementById('pay').value || 0;
+  const carrier = +document.getElementById('carrier').value || 0;
+
+  const r = compute({ gross, carrier });
+  const yourNet = Math.round(r.narta);
+  const [lab, cls] = bucket(yourNet);
+
+  document.getElementById('out').innerHTML = `
+    <div class="big">Your Net (80%): $${yourNet}</div>
+    <div class="bucket ${cls}">${lab}</div>
+    <details>
+      <summary>Deductions & holds (tap to open)</summary>
+      <div class="line"><span>Gross</span><span>$${Math.round(gross)}</span></div>
+      <div class="line"><span>Wall Street (10%)</span><span>-$${Math.round(r.ws)}</span></div>
+      <div class="line"><span>Carrier payout</span><span>-$${Math.round(carrier)}</span></div>
+      <div class="line"><span>Profit pool</span><span>$${Math.round(r.profitPool)}</span></div>
+      <div class="line"><span>Lexington (20%)</span><span>-$${Math.round(r.lex)}</span></div>
+      <div class="line"><span>Narta (80%)</span><span>$${Math.round(r.narta)}</span></div>
+    </details>
+    <div class="muted">
+      ${(document.getElementById('pickup').value||'?')}
+      →
+      ${(document.getElementById('delivery').value||'?')}
+      • ${(document.getElementById('notes').value||'')}
+    </div>
+  `;
+  renderSuggestions();
+};
+
+/* ============== SMART CARRIER PRICING (suggestions) ============== */
+function carrierForTarget({ gross, targetNarta=0 }){
+  const ws = Math.max(0, gross * 0.10);
+  const poolNeeded = targetNarta / 0.80;
+  const carrier = (gross - ws) - poolNeeded;
+  return Math.max(0, Math.round(carrier));
+}
+function acceptanceProbability({ carrier, miles=0, marketRpm=2.0, mode='neutral' }){
+  if (!miles || miles <= 0) return { rpm: null, label: '—' };
+  const rpm = carrier / miles;
+  let bonus = 0;
+  if (mode === 'hot')  bonus = -0.10;
+  if (mode === 'soft') bonus = +0.10;
+  const baseline = marketRpm * (1 + bonus);
+  let label = 'Very low (<20%)';
+  if (rpm >= baseline * 1.20)      label = 'High (70–90%)';
+  else if (rpm >= baseline * 1.00) label = 'Medium (40–70%)';
+  else if (rpm >= baseline * 0.85) label = 'Low (20–40%)';
+  return { rpm: +rpm.toFixed(2), label };
+}
+function renderSuggestions(){
+  const gross     = +document.getElementById('pay').value || 0;
+  const miles     = +document.getElementById('miles').value || 0;
+  const marketRpm = +document.getElementById('marketRpm').value || 2.0;
+  const mode      = (document.getElementById('marketMode').value || 'neutral');
+  const targets   = (document.getElementById('targets').value || '60,150,300')
+                    .split(',').map(s=>+s.trim()).filter(n=>n>0);
+  if(!gross){ document.getElementById('suggestions').innerHTML='Enter Gross, then press Calculate.'; return; }
+
+  const cards = targets.map(target=>{
+    const carrier = carrierForTarget({ gross, targetNarta: target });
+    const { rpm, label } = acceptanceProbability({ carrier, miles, marketRpm, mode });
+    const ex = compute({ gross, carrier });
+    return `
+      <div class="panel" style="margin-top:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div><b>Target your net: $${target}</b></div>
+          <button onclick="(function(){document.getElementById('carrier').value='${carrier}';document.getElementById('calc').click();})()">Use this price</button>
+        </div>
+        <div class="line"><span>Suggested carrier payout</span><span>$${carrier}</span></div>
+        <div class="line"><span>Profit pool</span><span>$${Math.round(ex.profitPool)}</span></div>
+        <div class="line"><span>Lexington (20%)</span><span>-$${Math.round(ex.lex)}</span></div>
+        <div class="line"><span>Narta (80%)</span><span>$${Math.round(ex.narta)}</span></div>
+        <div class="line"><span>Carrier RPM</span><span>${rpm===null?'—':('$'+rpm.toFixed(2)+'/mi')}</span></div>
+        <div class="line"><span>Acceptance chance</span><span>${label}</span></div>
+      </div>`;
+  }).join('');
+  document.getElementById('suggestions').innerHTML =
+    `<div class="muted" style="margin-bottom:6px">Pricing options to hit your targets:</div>${cards}`;
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Smart Freight — Paste Offer Parser</title>
+<style>
+  body{background:#0b0b0b;color:#eee;font-family:sans-serif;margin:0}
+  header{padding:12px 16px;border-bottom:1px solid #222}
+  .wrap{max-width:1000px;margin:0 auto;padding:16px}
+  textarea{width:100%;min-height:180px;background:#101010;color:#fff;border:1px solid #333;border-radius:8px;padding:10px}
+  .row{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid #222}
+  button{background:#151515;color:#0af;border:1px solid #2c2c2c;border-radius:8px;padding:8px 12px;cursor:pointer}
+  .pill{font-size:12px;color:#aaa}
+  .bucket{font-weight:700}.b300{color:#00d97e}.b150{color:#ffb703}.b80{color:#9cf}.bpass{color:#f33}
+  details{grid-column:1/-1;background:#101010;border:1px solid #2a2a2a;border-radius:10px;padding:10px}
+  summary{cursor:pointer;color:#9aa}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+  @media(max-width:800px){.grid2{grid-template-columns:1fr}}
+  input, select{width:100%;padding:8px;border-radius:6px;border:1px solid #333;background:#121212;color:#fff}
+  .line{display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px dashed #222}
+  .line:last-child{border-bottom:none}
+  .prob{font-weight:700}
+  .p-high{color:#00d97e}.p-med{color:#ffd166}.p-low{color:#ff6b6b}.p-unk{color:#9aa}
+</style>
+
+<!-- Google Maps JS (Distance Matrix) -->
+<script>
+  const GOOGLE_MAPS_KEY = 'AIzaSyAzYDKjl8bMWYREsqvKV9OWPMlvv1fRKSw';
+  window._gmapsReady = false;
+  window.initGmaps = function(){ window._gmapsReady = true; };
+  (function loadGMaps(){
+    const s = document.createElement('script');
+    s.src = 'https://maps.googleapis.com/maps/api/js?key='
+            + encodeURIComponent(GOOGLE_MAPS_KEY)
+            + '&callback=initGmaps';
+    s.async = true; s.defer = true;
+    document.head.appendChild(s);
+  })();
+</script>
+</head>
+<body>
+<header><a href="/" style="color:#0af;text-decoration:none">← Home</a></header>
+<div class="wrap">
+  <h2>Paste Offer Parser</h2>
+  <p class="pill">Broker model: Wall Street 10% → Carrier → split 80% (you) / 20% (Lexington). Buckets use your 80%.</p>
+
+  <div class="grid2" style="margin-bottom:8px">
+    <div>
+      <label style="font-size:12px;color:#aaa">Market Mode</label>
+      <select id="marketMode">
+        <option value="soft">Soft (lots of trucks)</option>
+        <option value="neutral" selected>Neutral</option>
+        <option value="hot">Hot (tight capacity)</option>
+      </select>
+    </div>
+    <div>
+      <label style="font-size:12px;color:#aaa">Round trip miles</label><br/>
+      <label style="font-size:12px;color:#aaa"><input id="roundTripGlobal" type="checkbox" checked> Use round trip</label>
+    </div>
+  </div>
+
+  <textarea id="txt" placeholder="Paste email or message here..."></textarea>
+  <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+    <button id="btnParse">Parse & Save</button>
+    <button id="btnExport">Export CSV</button>
+    <button id="btnClear">Clear Saved</button>
+  </div>
+
+  <div id="list" style="margin-top:8px"></div>
+</div>
+
+<script>
+/* ===================== STORAGE ====================== */
+const STATE_KEY = 'loads_v6';
+function getLoads(){ return JSON.parse(localStorage.getItem(STATE_KEY)||'[]'); }
+function saveLoads(a){ localStorage.setItem(STATE_KEY, JSON.stringify(a)); render(); }
+
+/* ===================== BUCKETS ====================== */
+function bucketByNarta(n){
+  if(n>=300) return ['KEEP 300','b300'];
+  if(n>=150) return ['KEEP 150','b150'];
+  if(n>=80)  return ['KEEP 80','b80'];
+  return ['PASS','bpass'];
+}
+
+/* ===================== PARSER ======================= */
+function parseText(text){
+  const t=(text||'').replace(/\u00A0/g,' ').replace(/\s+/g,' ').trim();
+  const cityRe=/\b([A-Za-z .'-]{2,}),?\s+(AL|AK|AZ|AR|CA|CO|CT|DC|DE|FL|GA|HI|IA|ID|IL|IN|KS|KY|LA|MA|MD|ME|MI|MN|MO|MS|MT|NC|ND|NE|NH|NJ|NM|NV|NY|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VA|VT|WA|WI|WV)\b/g;
+  const citySt=[...t.matchAll(cityRe)];
+  const pickup = citySt[0]?.[0] || null;
+  const delivery = citySt[1]?.[0] || null;
+
+  const hasRate=/\b(rate|pay|all[-\s]?in|offer|price|usd|total)\b/i.test(t);
+  function collect(re){ const out=[]; for(const m of t.matchAll(re)){ const raw=(m[1]||'').replace(/[,\s]/g,''); const n=parseFloat(raw); if(!isNaN(n)&&n>0) out.push(n); } return out; }
+  const patDollar=/\$\s*([0-9]{1,3}(?:[,\s][0-9]{3})*(?:\.[0-9]{2})|[0-9]+(?:\.[0-9]{2})?)/gi;
+  const patKeyword=/\b(?:rate|pay|all[-\s]?in|offer|price|usd|total)\b[:=\-\s]*\$?\s*([0-9]{1,3}(?:[,\s][0-9]{3})*(?:\.[0-9]{2})?|[0-9]+(?:\.[0-9]{2})?)/gi;
+  const patFallback=/\b([0-9]{1,3}(?:[,\s][0-9]{3})+|[1-9][0-9]{2,})(?:\.[0-9]{2})?\b/g;
+
+  let candidates=[...collect(patDollar), ...collect(patKeyword)];
+  if(candidates.length===0 && hasRate) candidates=collect(patFallback);
+  const gross = candidates.length ? Math.max(...candidates) : 0;
+
+  // Miles present? e.g., "Miles: 320" or "320 mi"
+  let miles=0; const m1=t.match(/\b([0-9]{1,4})\s*mi(?:les)?\b/i) || t.match(/\bmiles?:?\s*([0-9]{1,4})\b/i);
+  if(m1) miles=+m1[1];
+
+  return { pickup, delivery, gross, miles };
+}
+
+/* ===================== BROKER MODEL ================== */
+function compute({ gross, carrier=0 }){
+  const ws = Math.max(0, gross * 0.10);
+  const profitPool = (gross - ws) - (carrier||0);
+  const narta = Math.max(0, profitPool * 0.80);
+  const lex   = Math.max(0, profitPool * 0.20);
+  return { ws, profitPool, narta, lex };
+}
+
+/* ===== Helpers for options & Google miles ===== */
+function carrierForTarget(gross, targetNarta){
+  const ws = Math.max(0, gross * 0.10);
+  const poolNeeded = targetNarta / 0.80;
+  const carrier = (gross - ws) - poolNeeded;
+  return Math.max(0, Math.round(carrier));
+}
+function applyCarrier(index, value){
+  const arr=getLoads(); if(!arr[index]) return;
+  arr[index].carrier=+value||0; saveLoads(arr);
+}
+
+// one-way miles via Distance Matrix
+function getOneWayMiles(pickup, delivery){
+  return new Promise((resolve,reject)=>{
+    if(!window._gmapsReady || !window.google || !google.maps){
+      return reject('Google not loaded yet');
+    }
+    const svc = new google.maps.DistanceMatrixService();
+    svc.getDistanceMatrix({
+      origins: [pickup],
+      destinations: [delivery],
+      travelMode: google.maps.TravelMode.DRIVING,
+      unitSystem: google.maps.UnitSystem.IMPERIAL
+    }, (res, status)=>{
+      if(status !== 'OK') return reject(status||'Unknown error');
+      const el = res?.rows?.[0]?.elements?.[0];
+      if(!el || el.status !== 'OK') return reject(el?.status || 'No route');
+      resolve(el.distance.value / 1609.34);
+    });
+  });
+}
+
+async function autoMiles(index){
+  const arr = getLoads();
+  const item = arr[index];
+  if(!item) return;
+  const origin = (item.pickup||'').trim();
+  const dest   = (item.delivery||'').trim();
+  if(!origin || !dest){ alert('Missing pickup/delivery on this card.'); return; }
+
+  try{
+    const oneWay = await getOneWayMiles(origin, dest);
+    const roundTrip = document.getElementById('roundTripGlobal')?.checked;
+    const miles = Math.round(oneWay * (roundTrip?2:1));
+    item.miles = miles;
+    saveLoads(arr);
+    const box = document.getElementById('mi_'+index);
+    if(box) box.value = miles;
+  }catch(e){
+    alert('Miles lookup failed: '+e+'\n\nCheck: Maps JavaScript API + Distance Matrix API enabled, billing active, and referrer allows your domain.');
+  }
+}
+
+/* ===================== INTERMODAL PROBABILITY ================== */
+const PRIMARY_HUBS = [
+ 'Chicago, IL','Los Angeles, CA','Long Beach, CA','Oakland, CA','Seattle, WA','Tacoma, WA',
+ 'Newark, NJ','Elizabeth, NJ','Jersey City, NJ','Savannah, GA','Charleston, SC',
+ 'Norfolk, VA','Memphis, TN','Kansas City, MO','Dallas, TX','Fort Worth, TX',
+ 'Atlanta, GA','Houston, TX','Jacksonville, FL'
+];
+const SECONDARY_HUBS = [
+ 'St. Louis, MO','Cincinnati, OH','Columbus, OH','Cleveland, OH','Louisville, KY',
+ 'Indianapolis, IN','Detroit, MI','Phoenix, AZ','Reno, NV','Stockton, CA',
+ 'Philadelphia, PA','Baltimore, MD','Miami, FL'
+];
+function isInList(citySt, list){ if(!citySt) return false; const s=citySt.toLowerCase(); return list.some(x=>s.includes(x.toLowerCase())); }
+function bandBaselineRpm(mi){
+  if(mi<=0 || isNaN(mi)) return 2.50;
+  if(mi<=30)  return 6.00;
+  if(mi<=75)  return 4.50;
+  if(mi<=200) return 3.25;
+  if(mi<=500) return 2.50;
+  return 2.20;
+}
+function modeAdj(mode){ if(mode==='hot') return -0.10; if(mode==='soft') return +0.10; return 0; }
+function hubAdj(origin, dest){
+  let adj=0;
+  if(isInList(origin, PRIMARY_HUBS)) adj+=8; else if(isInList(origin, SECONDARY_HUBS)) adj+=4;
+  if(isInList(dest, PRIMARY_HUBS))   adj+=5; else if(isInList(dest, SECONDARY_HUBS))   adj+=2;
+  return adj;
+}
+function dayAdj(){ const d=(new Date()).getDay(); if(d===0||d===6) return -5; if(d===1) return -2; if(d===5) return +2; return 0; }
+function intermodalProbability({ gross, carrier, miles=0, origin, dest, mode='neutral' }){
+  let score=65;
+  if(gross>0 && carrier >= (gross*0.90)) score -= 10;
+  const rpm = miles>0 ? (carrier/miles) : null;
+  const baseRpm = bandBaselineRpm(miles);
+  const baseline = baseRpm * (1 + modeAdj(mode));
+  if(rpm!==null){
+    const ratio = rpm / baseline;
+    if(ratio >= 1.25) score += 15;
+    else if(ratio >= 1.05) score += 8;
+    else if(ratio >= 0.90) score += 0;
+    else if(ratio >= 0.80) score -= 10;
+    else score -= 18;
+  }
+  score += hubAdj(origin, dest);
+  score += dayAdj();
+  score = Math.max(5, Math.min(95, Math.round(score)));
+
+  let label='Tough', css='p-low';
+  if(score>=85){ label='Very likely'; css='p-high'; }
+  else if(score>=65){ label='Possible'; css='p-med'; }
+  else if(score>=45){ label='Tough'; css='p-low'; }
+  else { label='Unlikely'; css='p-low'; }
+
+  return { score, label, css, rpm: rpm!==null?+rpm.toFixed(2):null, baseline:+baseline.toFixed(2) };
+}
+
+/* ===================== UI RENDER ===================== */
+function render(){
+  const data=getLoads();
+  const arr=data.slice().reverse();
+  const list=document.getElementById('list');
+  if(!arr.length){ list.innerHTML='<div class="pill">No saved offers yet.</div>'; return; }
+
+  const mode=document.getElementById('marketMode').value;
+
+  list.innerHTML = arr.map((l, idxRev) => {
+    const realIdx=(data.length-1)-idxRev;
+    l.carrier=+l.carrier||0;
+    l.miles=+l.miles||0;
+
+    const r=compute(l);
+    const yourNet=Math.round(r.narta);
+    const [lab, cls]=bucketByNarta(yourNet);
+    const prob=intermodalProbability({
+      gross:l.gross||0, carrier:l.carrier||0, miles:l.miles||0,
+      origin:l.pickup, dest:l.delivery, mode
+    });
+    const id='d_'+idxRev;
+
+    const optionsHtml = [300,150,60].map(target=>{
+      const suggCarrier=carrierForTarget(l.gross||0, target);
+      const rpmTxt = (l.miles && l.miles>0) ? ('$'+(suggCarrier/Math.max(1,l.miles)).toFixed(2)+'/mi') : '—';
+      const pr = intermodalProbability({
+        gross:l.gross||0, carrier:suggCarrier, miles:l.miles||0,
+        origin:l.pickup, dest:l.delivery, mode
+      });
+      return `
+        <div class="line">
+          <span><b>$${target}</b> net</span>
+          <span>
+            $${suggCarrier} ${rpmTxt==='—'?'':'• '+rpmTxt}
+            • <span class="prob ${pr.css}">${pr.label}</span> (${pr.score}%)
+            <button style="margin-left:8px" onclick="applyCarrier(${realIdx}, ${suggCarrier})">Use</button>
+          </span>
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="row">
+        <div>
+          <div><b>${l.pickup||'?'}</b> → <b>${l.delivery||'?'}</b></div>
+          <div class="pill">Gross $${Math.round(l.gross||0)} • ${new Date(l.ts||Date.now()).toLocaleString()}</div>
+          <div class="pill">Sell probability: <span class="prob ${prob.css}">${prob.label}</span> (${prob.score}%) ${prob.rpm===null?'':`• RPM $${prob.rpm}/mi vs base $${prob.baseline}/mi`}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="bucket ${cls}">${lab}</div>
+          <div>Your Net (80%): $${yourNet}</div>
+        </div>
+        <div><button onclick="(function(){const el=document.getElementById('${id}'); if(el) el.open=!el.open;})()">Open</button></div>
+
+        <details id="${id}">
+          <summary>Deductions & holds (tap to open/close)</summary>
+          <div class="line"><span>Gross</span><span>$${Math.round(l.gross||0)}</span></div>
+          <div class="line"><span>Wall Street (10% of gross)</span><span>-$${Math.round(r.ws)}</span></div>
+          <div class="line"><span>Carrier payout</span><span>-$${Math.round(l.carrier)}</span></div>
+          <div class="line"><span>Profit pool</span><span>$${Math.round(r.profitPool)}</span></div>
+          <div class="line"><span>Lexington (20%)</span><span>-$${Math.round(r.lex)}</span></div>
+          <div class="line"><span>Narta (80%)</span><span>$${Math.round(r.narta)}</span></div>
+
+          <div class="grid2" style="margin-top:8px">
+            <div>
+              <label style="font-size:12px;color:#aaa">Carrier $ (manual)</label>
+              <input value="${l.carrier}" oninput="editVal(${realIdx},'carrier',this.value)">
+            </div>
+            <div>
+              <label style="font-size:12px;color:#aaa">Miles (dray/linehaul)</label>
+              <div style="display:flex;gap:6px">
+                <input id="mi_${realIdx}" value="${l.miles||''}" oninput="editVal(${realIdx},'miles',this.value)">
+                <button type="button" onclick="autoMiles(${realIdx})">Get Miles</button>
+              </div>
+              <div class="pill">Uses Google; toggle “Round trip miles” at top.</div>
+            </div>
+          </div>
+
+          <div class="line" style="margin-top:10px;border-bottom:none">
+            <span style="color:#9aa">Auto options (your net → carrier / RPM / chance)</span>
+            <span></span>
+          </div>
+          ${optionsHtml}
+        </details>
+      </div>`;
+  }).join('');
+}
+
+function editVal(index,key,val){
+  const arr=getLoads();
+  arr[index][key]=+val||0;
+  saveLoads(arr);
+}
+
+/* ================== ACTIONS ================= */
+document.getElementById('btnParse').onclick=()=>{
+  const text=document.getElementById('txt').value||'';
+  if(!text.trim()) return;
+  const p=parseText(text);
+  const arr=getLoads();
+  arr.push({ ...p, ts:Date.now(), source:'Paste', carrier:0, miles:p.miles||0 });
+  saveLoads(arr);
+  document.getElementById('txt').value='';
+};
+
+document.getElementById('btnExport').onclick=()=>{
+  const arr=getLoads(); if(!arr.length) return alert('No data');
+  const header='ts,source,pickup,delivery,gross,ws,carrier,profit_pool,narta_80,lexington_20,miles,market_mode';
+  const mode=document.getElementById('marketMode').value;
+  const rows=arr.map(l=>{
+    const r=compute(l);
+    return [
+      new Date(l.ts).toISOString(),
+      l.source||'Paste',
+      (l.pickup||'').replaceAll(',',' '),
+      (l.delivery||'').replaceAll(',',' '),
+      Math.round(l.gross||0),
+      Math.round(r.ws),
+      Math.round(l.carrier||0),
+      Math.round(r.profitPool),
+      Math.round(r.narta),
+      Math.round(r.lex),
+      Math.round(l.miles||0),
+      mode
+    ].join(',');
+  });
+  const csv=[header,...rows].join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='offers.csv'; a.click(); URL.revokeObjectURL(url);
+};
+
+document.getElementById('btnClear').onclick=()=>{ if(confirm('Clear saved offers?')) saveLoads([]); };
+document.getElementById('marketMode').onchange=render;
+
+// Initial render
+render();
+</script>
+</body>
+</html>

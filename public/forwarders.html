@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Forwarders — Narta Express</title>
+  <style>
+    body{background:#0a0a0c;color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0}
+    header{display:flex;gap:14px;align-items:center;padding:14px 18px;background:#101216;border-bottom:1px solid #1b2026;position:sticky;top:0;z-index:5;overflow-x:auto;white-space:nowrap}
+    a{color:#00cfff;text-decoration:none}
+    .wrap{max-width:1100px;margin:0 auto;padding:18px}
+    .card{background:#101216;border:1px solid #1b2026;border-radius:12px;padding:14px;margin:12px 0}
+    .row{display:flex;gap:10px;flex-wrap:wrap}.col{flex:1 1 220px}
+    input,select,textarea{background:#0f1216;color:#fff;border:1px solid #1b2026;padding:10px;border-radius:10px;width:100%;box-sizing:border-box}
+    button{background:linear-gradient(180deg,#0f1216,#0b0d11);color:#fff;border:1px solid #1b2026;padding:10px 14px;border-radius:10px;cursor:pointer;font-weight:700}
+    table{width:100%;border-collapse:separate;border-spacing:0 8px} th,td{padding:10px;border-top:1px solid #1b2026;border-bottom:1px solid #1b2026} tr{background:#0f1216}
+    @media (max-width:480px){.row{display:block}.col{width:100%}button{width:100%}}
+  </style>
+</head>
+<body>
+<header>
+  <div><b>NE</b> — Forwarders</div>
+  <a href="/">Home</a>
+</header>
+<div class="wrap">
+  <div class="card">
+    <h2>Nationwide Forwarders Finder (20’ / 40’ / 45’)</h2>
+    <div class="row">
+      <div class="col"><input id="city" placeholder="City (optional e.g., Chicago)"></div>
+      <div class="col"><input id="state" placeholder="State (optional e.g., IL)"></div>
+      <div class="col">
+        <select id="sizes" multiple size="3">
+          <option value="20" selected>20'</option>
+          <option value="40" selected>40'</option>
+          <option value="45" selected>45'</option>
+        </select>
+      </div>
+      <div class="col"><input id="minScore" type="number" value="50" placeholder="Min score"></div>
+      <div class="col"><label><input type="checkbox" id="scrape" checked> Fetch phone/email</label></div>
+    </div>
+    <div class="row">
+      <div class="col"><button id="search">Search USA</button></div>
+      <div class="col"><button id="copyEmails">Copy Emails</button></div>
+      <div class="col"><button id="exportCsv">Export CSV</button></div>
+      <div class="col"><button id="emailSel">Email Selected</button></div>
+    </div>
+    <div id="status" style="opacity:.75;margin-top:6px"></div>
+    <div id="results" class="card"></div>
+  </div>
+</div>
+
+<div id="emailModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:20;">
+  <div style="max-width:600px; margin:60px auto; background:#101216; border:1px solid #1b2026; padding:16px; border-radius:12px; color:#fff;">
+    <h3>Send Email to Selected</h3>
+    <div class="row">
+      <div class="col"><select id="emProvider"><option value="sendgrid">SendGrid</option><option value="mailgun">Mailgun</option></select></div>
+      <div class="col"><input id="emFrom" placeholder="dispatch@yourdomain.com"></div>
+    </div>
+    <input id="emSubject" placeholder="Subject">
+    <textarea id="emBody" rows="8" placeholder="Body (plain text)"></textarea>
+    <div class="row">
+      <div class="col"><button id="emPreview">Dry-run</button></div>
+      <div class="col"><button id="emSend">Send</button></div>
+      <div class="col"><button id="emCancel">Cancel</button></div>
+    </div>
+    <div id="emStatus" style="opacity:.75;margin-top:6px"></div>
+  </div>
+</div>
+
+<script>
+var $=function(id){return document.getElementById(id)};
+function sizes(){ return Array.prototype.map.call($('#sizes').selectedOptions, function(o){ return o.value; }); }
+
+$('#search').onclick=async function(){
+  var q = {city: ($('#city').value||'').trim(), state: ($('#state').value||'').trim(), sizes: sizes(), minScore: Number($('#minScore').value||0), scrape: $('#scrape').checked};
+  $('#status').textContent='Searching…';
+  var r = await fetch('/api/forwarders/smart?q='+encodeURIComponent(JSON.stringify(q)));
+  var j = await r.json();
+  $('#status').textContent = (j.ok? 'Found '+j.count : 'Error') + (j.note? ' — '+j.note:'');
+  window._fw = j.items||[]; render(window._fw);
+};
+
+$('#copyEmails').onclick=function(){
+  var emails=Array.from(new Set((window._fw||[]).flatMap(function(x){return x.emails||[]})));
+  navigator.clipboard.writeText(emails.join(', ')); alert('Copied '+emails.length+' emails');
+};
+
+$('#exportCsv').onclick=function(){
+  var rows=[['Sel','Company','Score','Phone','Email','Link','Tags']];
+  (window._fw||[]).forEach(function(it){
+    rows.push(['', it.title||'', it.score||'', (it.phones||[]).join(' '), (it.emails||[]).join(' '), it.link||'', (it.tags||[]).join(' ')]);
+  });
+  var csv=rows.map(function(r){return r.map(function(c){return '\"'+String(c).replace(/\"/g,'\"\"')+'\"';}).join(',');}).join('\\r\\n');
+  var url=URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+  var a=document.createElement('a'); a.href=url; a.download='forwarders.csv'; a.click(); URL.revokeObjectURL(url);
+};
+
+$('#emailSel').onclick=function(){
+  var emails=selectedEmails(); if(!emails.length) return alert('Select at least one row.');
+  $('#emailModal').style.display='block';
+};
+$('#emCancel').onclick=function(){ $('#emailModal').style.display='none'; $('#emStatus').textContent=''; };
+$('#emPreview').onclick=function(){ sendEmails(true); };
+$('#emSend').onclick=function(){ sendEmails(false); };
+
+async function sendEmails(dry){
+  var emails = selectedEmails(); if(!emails.length) return alert('No emails selected');
+  var payload = { provider: $('#emProvider').value, from: $('#emFrom').value, subject: $('#emSubject').value, body: $('#emBody').value, bcc: emails, dry:dry };
+  $('#emStatus').textContent='Sending...';
+  var r = await fetch('/api/mailer/send', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+  var j = await r.json();
+  $('#emStatus').textContent = (j.ok? 'OK' : 'Error') + ' — ' + (j.note||j.detail||JSON.stringify(j));
+}
+
+function selectedEmails(){
+  var cbs = Array.prototype.filter.call(document.querySelectorAll('.rowSel'), function(cb){ return cb.checked; });
+  return Array.from(new Set(cbs.map(function(cb){return cb.getAttribute('data-email');}).filter(Boolean)));
+}
+
+function render(items){
+  var head = '<table><thead><tr><th><input type="checkbox" id="selAll"></th><th>Company</th><th>Score</th><th>Phone</th><th>Email</th><th>Link</th><th>Tags</th></tr></thead><tbody>';
+  var rows = (items||[]).map(function(it){
+    var phone=(it.phones||[])[0]||''; var email=(it.emails||[])[0]||'';
+    return '<tr>' +
+      '<td><input type=\"checkbox\" class=\"rowSel\" data-email=\"'+escapeHtml(email)+'\"></td>' +
+      '<td>'+escapeHtml(it.title||'')+'</td>' +
+      '<td>'+(it.score||0)+'</td>' +
+      '<td>'+escapeHtml(phone)+'</td>' +
+      '<td>'+escapeHtml(email)+'</td>' +
+      '<td><a target=\"_blank\" href=\"'+(it.link||'#')+'\">'+(it.displayed_link||'open')+'</a></td>' +
+      '<td>'+escapeHtml((it.tags||[]).join(', '))+'</td>' +
+    '</tr>';
+  }).join('');
+  var foot='</tbody></table>';
+  $('#results').innerHTML=head+rows+foot;
+  var all = document.getElementById('selAll'); if(all){ all.onchange = function(e){ document.querySelectorAll('.rowSel').forEach(function(cb){ cb.checked = e.target.checked; }); }; }
+}
+function escapeHtml(s){return String(s||'').replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];})}
+</script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+{
+  "routes": [
+    {
+      "src": "^/$",
+      "dest": "/index.html"
+    },
+    {
+      "src": "^/tools/paste$",
+      "dest": "/tools/paste.html"
+    },
+    {
+      "src": "^/tools/calc$",
+      "dest": "/tools/calc.html"
+    },
+    {
+      "src": "^/tools/ifta$",
+      "dest": "/tools/ifta.html"
+    },
+    {
+      "src": "^/hidden/email$",
+      "dest": "/hidden/email.html"
+    }
+  ]
+}

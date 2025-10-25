@@ -1,0 +1,8 @@
+{
+  "name": "smart-freight",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "imapflow": "^1.0.136"
+  }
+}

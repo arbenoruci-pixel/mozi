@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Google Miles Test</title>
+<style>
+  body{background:#0b0b0b;color:#eee;font-family:sans-serif;margin:0;padding:20px}
+  input,button{padding:10px;border-radius:8px;border:1px solid #333;background:#101010;color:#fff}
+  .row{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;max-width:900px}
+  .card{max-width:900px;background:#111;border:1px solid #222;border-radius:10px;padding:12px;margin-top:12px}
+  code{background:#161616;padding:2px 6px;border-radius:5px}
+</style>
+
+<!-- 👇 keep your key here -->
+<script>
+  const GOOGLE_MAPS_KEY = 'AIzaSyAzYDKjl8bMWYREsqvKV9OWPMlvv1fRKSw';
+  window._gmapsReady = false;
+  window.initGmaps = () => window._gmapsReady = true;
+
+  (function load(){
+    const s = document.createElement('script');
+    s.src = 'https://maps.googleapis.com/maps/api/js?key='
+      + encodeURIComponent(GOOGLE_MAPS_KEY) + '&callback=initGmaps';
+    s.async = true; s.defer = true;
+    document.head.appendChild(s);
+  })();
+</script>
+</head>
+<body>
+  <h2>Google DistanceMatrix — Miles Test</h2>
+
+  <div class="row">
+    <input id="from" placeholder="Pickup (e.g., Chicago, IL)" />
+    <input id="to" placeholder="Delivery (e.g., Louisville, KY)" />
+    <button id="run" disabled>Run Test</button>
+  </div>
+
+  <div class="card" id="out">Loading Google…</div>
+
+<script>
+  const out = document.getElementById('out');
+  const run = document.getElementById('run');
+
+  const iv = setInterval(() => {
+    if (window._gmapsReady) {
+      run.disabled = false;
+      out.textContent = 'Ready. Enter cities and press Run Test.';
+      clearInterval(iv);
+    }
+  }, 150);
+
+  function getOneWayMiles(origin, destination){
+    return new Promise((resolve, reject) => {
+      if (!window._gmapsReady || !google?.maps) return reject('Google not loaded');
+      const svc = new google.maps.DistanceMatrixService();
+      svc.getDistanceMatrix({
+        origins: [origin],
+        destinations: [destination],
+        travelMode: google.maps.TravelMode.DRIVING,
+        unitSystem: google.maps.UnitSystem.IMPERIAL
+      }, (res, status) => {
+        if (status !== 'OK') return reject('SERVICE: ' + status);
+        const el = res?.rows?.[0]?.elements?.[0];
+        if (!el) return reject('No element');
+        if (el.status !== 'OK') return reject('ELEMENT: ' + el.status);
+        resolve(el.distance.value / 1609.34);
+      });
+    });
+  }
+
+  run.onclick = async () => {
+    const a = document.getElementById('from').value.trim();
+    const b = document.getElementById('to').value.trim();
+    if (!a || !b) { out.textContent = 'Type both pickup and delivery.'; return; }
+    out.textContent = 'Querying Google…';
+    try {
+      const one = await getOneWayMiles(a, b);
+      const rt = Math.round(one * 2);
+      out.innerHTML = `
+        ✅ One-way: <b>${Math.round(one)}</b> mi &nbsp;|&nbsp;
+        ✅ Round trip: <b>${rt}</b> mi
+        <div style="margin-top:8px;color:#aaa">If this shows miles, your key + domain + billing are good.</div>
+      `;
+    } catch (e) {
+      out.innerHTML = `
+        ❌ Failed: <code>${String(e)}</code>
+        <div style="margin-top:8px;color:#aaa">
+          Common fixes:
+          <ul>
+            <li>Enable <b>Maps JavaScript API</b> (client-side DistanceMatrix is inside it).</li>
+            <li>Billing enabled on the project.</li>
+            <li>Credentials → Key restrictions → HTTP referrers include:
+              <div><code>https://mozi-fawn.vercel.app/*</code></div>
+              <div><code>https://*.vercel.app/*</code> (preview)</div>
+              <div><code>http://localhost/*</code> (local)</div>
+            </li>
+          </ul>
+        </div>
+      `;
+    }
+  };
+</script>
+</body>
+</html>

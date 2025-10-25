@@ -1,0 +1,284 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mail Scanner Test</title>
+  <style>
+    body{font-family:system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:#0b0b0b; color:#eaeaea; padding:16px;}
+    label{display:block;margin:10px 0 4px;}
+    input,select,button,textarea{width:100%; padding:10px; border-radius:8px; border:1px solid #333; background:#111; color:#eee;}
+    button{cursor:pointer;}
+    .row{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+    pre{white-space:pre-wrap; background:#111; padding:12px; border-radius:8px; border:1px solid #333; max-height:50vh; overflow:auto;}
+  </style>
+</head>
+<body>
+  <h1>Mail Scanner (IMAP)</h1>
+  <p><b>Security tip:</b> For Gmail, create an <i>App Password</i> and use it here. Credentials are sent only to your own endpoint and not stored.</p>
+  <div class="row">
+    <div>
+      <label>Preset</label>
+      <select id="preset">
+        <option value="gmail">Gmail</option>
+        <option value="outlook">Outlook 365</option>
+        <option value="yahoo">Yahoo</option>
+        <option value="custom">Custom</option>
+      </select>
+    </div>
+    <div></div>
+  </div>
+
+  <div id="customHost" style="display:none" class="row">
+    <div><label>Host</label><input id="host" placeholder="imap.example.com"></div>
+    <div><label>Port</label><input id="port" type="number" value="993"></div>
+    <div><label>Secure (TLS)</label><select id="secure"><option value="true">true</option><option value="false">false</option></select></div>
+  </div>
+
+  <label>Email</label><input id="user" placeholder="you@example.com">
+  <label>Password / App Password</label><input id="pass" type="password" placeholder="••••••••">
+  <div class="row">
+    <div><label>Mailbox</label><input id="mailbox" value="INBOX"></div>
+    <div><label>Since (days)</label><input id="sinceDays" type="number" value="3"></div>
+  </div>
+  <div class="row">
+    <div><label>Limit</label><input id="limit" type="number" value="50"></div>
+    <div><label>From filter (contains)</label><input id="fromFilter" placeholder="jb hunt, schneider, ..."></div>
+  </div>
+  <button id="run">Scan</button>
+
+  <h2>Result</h2>
+  <div id="cards"></div>
+  <pre id="out" style="display:none"></pre>
+
+<script>
+const $ = id => document.getElementById(id);
+$('preset').addEventListener('change', e=>{
+  $('customHost').style.display = e.target.value==='custom' ? 'grid':'none';
+});
+
+$('run').addEventListener('click', async ()=>{
+  const body = {
+    preset: $('preset').value,
+    user: $('user').value.trim(),
+    pass: $('pass').value,
+    mailbox: $('mailbox').value.trim(),
+    sinceDays: Number($('sinceDays').value||3),
+    limit: Number($('limit').value||50),
+    fromFilter: $('fromFilter').value.trim()
+  };
+  if (body.preset==='custom') {
+    body.host = $('host').value.trim();
+    body.port = Number($('port').value||993);
+    body.secure = $('secure').value==='true';
+  }
+  $('out').textContent = 'Running…';
+  try{
+    const r = await fetch('/api/mail/scan', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body)
+    });
+    const j = await r.json();
+    $('out').textContent = JSON.stringify(j, null, 2);
+  }catch(e){
+    $('out').textContent = 'Error: '+ e.message;
+  }
+});
+
+function renderCards(obj){
+  const root = document.getElementById('cards');
+  root.innerHTML = '';
+  if (!obj || !obj.ok) { root.innerHTML = '<p>Nothing found.</p>'; return; }
+
+  function section(title, arr){
+    if (!arr || !arr.length) return;
+    const h = document.createElement('h3'); h.textContent = title; root.appendChild(h);
+    for (const it of arr){
+      const card = document.createElement('div');
+      card.style.border = '2px solid ' + (it.colorHint==='green'?'#16a34a': it.colorHint==='orange'?'#f59e0b':'#374151');
+      card.style.borderRadius = '10px'; card.style.padding = '10px'; card.style.margin = '8px 0';
+      const badge = it.senderType==='freight_forwarder' ? 'FREIGHT FORWARDER' : (it.senderType==='broker'?'BROKER':'OTHER');
+      const badgeColor = it.senderType==='freight_forwarder' ? '#16a34a' : (it.senderType==='broker'?'#f59e0b':'#6b7280');
+      card.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <strong>${it.subject||'(no subject)'}</strong>
+          <span style="font-size:12px;background:${badgeColor};color:#0b0b0b;border-radius:6px;padding:2px 8px;">${badge}</span>
+        </div>
+        <div style="font-size:14px;opacity:.9;margin-bottom:6px;">From: ${it.from||''}</div>
+        <div style="font-size:14px;margin-bottom:6px;">Pickup: <b>${it.pickup||''}</b> → Delivery: <b>${it.delivery||''}</b></div>
+        <div style="font-size:14px;margin-bottom:6px;">Equip: ${it.equip||''} ${it.sizeFt?('(' + it.sizeFt + 'ft)'):''}
+          ${ (it.ramps&&it.ramps.length)? ' • Ramps: '+it.ramps.join(', ') : ''}
+          ${ (it.ports&&it.ports.length)? ' • Ports: '+it.ports.join(', ') : ''}
+        </div>
+        <div style="font-size:14px;margin-bottom:6px;">When: ${it.when||''} • Rate: ${it.price?('$'+it.price):'—'} • Rank: ${it.rank?.band||''} (${it.rank?.score||0})</div>
+      `;
+      root.appendChild(card);
+    }
+  }
+
+  section('Doable', obj.doable);
+  section('Maybe', obj.maybe);
+  section('Skip', obj.skip);
+}
+
+(async ()=>{
+  // Hook the existing run button to render cards
+  const oldRun = $('run').onclick;
+  $('run').onclick = null;
+  $('run').addEventListener('click', async ()=>{
+    const body = {
+      preset: $('preset').value,
+      user: $('user').value.trim(),
+      pass: $('pass').value,
+      mailbox: $('mailbox').value.trim(),
+      sinceDays: Number($('sinceDays').value||3),
+      limit: Number($('limit').value||50),
+      fromFilter: $('fromFilter').value.trim()
+    };
+    if (body.preset==='custom') {
+      body.host = $('host').value.trim();
+      body.port = Number($('port').value||993);
+      body.secure = $('secure').value==='true';
+    }
+    const o = document.getElementById('out'); o.style.display='block'; o.textContent='Running…';
+    try{
+      const r = await fetch('/api/mail/scan', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(body)
+      });
+      const j = await r.json();
+      o.textContent = JSON.stringify(j, null, 2);
+      renderCards(j);
+    }catch(e){
+      o.textContent = 'Error: '+ e.message;
+    }
+  });
+})();
+
+// === One-tap actions ===
+
+// Local storage helpers
+const LS = {
+  get(key, def){ try{ return JSON.parse(localStorage.getItem(key) || JSON.stringify(def)); }catch{ return def; } },
+  set(key, val){ localStorage.setItem(key, JSON.stringify(val)); }
+};
+
+function saveLeadFromItem(it){
+  const leads = LS.get('leads_v1', []);
+  const dom = (it.from||'').split('@')[1]?.split('>')[0]?.trim() || '';
+  const exists = leads.some(x=> x.domain===dom && x.subject===it.subject);
+  if (!exists){
+    leads.push({
+      when: new Date().toISOString(),
+      from: it.from, domain: dom, subject: it.subject || '',
+      pickup: it.pickup||'', delivery: it.delivery||'',
+      sizeFt: it.sizeFt||null, ramps: it.ramps||[], ports: it.ports||[],
+      note: ''
+    });
+    LS.set('leads_v1', leads);
+  }
+  return leads.length;
+}
+function blockSender(it){
+  const bl = LS.get('blocklist_v1', []);
+  const dom = (it.from||'').split('@')[1]?.split('>')[0]?.trim() || (it.from||'').trim();
+  if (dom && !bl.includes(dom)) { bl.push(dom); LS.set('blocklist_v1', bl); }
+  return bl.slice();
+}
+
+function fmtMiles(n){ return typeof n==='number' ? (n+' mi') : '—'; }
+
+// Pricing rules (defaults): Lexington 10% first, then 80/20 split
+function pricingSuggestion(rate, baseCosts=0, opts={lex:0.10, narta:0.80, contractor:0.20}){
+  const gross = Number(rate||0);
+  const lexCut = Math.max(0, gross * opts.lex);
+  const afterLex = gross - lexCut;
+  const profit = afterLex - Number(baseCosts||0);
+  const narta = profit * opts.narta;
+  const contractor = profit * opts.contractor;
+  return { gross, lexCut: Math.round(lexCut), afterLex: Math.round(afterLex), baseCosts, profit: Math.round(profit), narta: Math.round(narta), contractor: Math.round(contractor) };
+}
+
+async function checkMiles(it, btn){
+  btn.disabled = true; btn.textContent = 'Miles…';
+  try{
+    const q = new URLSearchParams({ orig: it.pickup||'', dest: it.delivery||'', roundTrip: '1' });
+    const r = await fetch('/api/miles?'+q.toString());
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error||'miles failed');
+    btn.textContent = `Miles: ${j.miles} (1w ${j.oneWay})`;
+  }catch(e){ btn.textContent = 'Miles ERR'; }
+  finally{ setTimeout(()=>{ btn.disabled=false; }, 800); }
+}
+async function checkIFTA(it, btn){
+  btn.disabled = true; btn.textContent = 'IFTA…';
+  try{
+    const r = await fetch('/api/ifta', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ orig: it.pickup||'', dest: it.delivery||'', roundTrip: true, maxSamples: 50 })
+    });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error||'ifta failed');
+    const top = Object.entries(j.byState||{}).sort((a,b)=> b[1]-a[1]).slice(0,3).map(([s,m])=>`${s}:${m}`).join('  ');
+    btn.textContent = `IFTA: ${j.totalMiles} | ${top}`;
+  }catch(e){ btn.textContent = 'IFTA ERR'; }
+  finally{ setTimeout(()=>{ btn.disabled=false; }, 800); }
+}
+function scoreAndCounter(it, btn){
+  const res = pricingSuggestion(it.price||0, 0); // you can feed baseCosts later
+  btn.textContent = `Profit ${res.profit} → Narta ${res.narta} / Cont ${res.contractor}`;
+  setTimeout(()=>{ btn.textContent='SCORE & COUNTER'; }, 4000);
+}
+
+// Enhance cards with buttons
+function enhanceCards(){
+  const root = document.getElementById('cards');
+  for (const card of root.querySelectorAll('[data-kind="card"]')){
+    if (card.getAttribute('data-upgraded')==='1') continue;
+    card.setAttribute('data-upgraded','1');
+    const data = JSON.parse(card.getAttribute('data-item')||'{}');
+    const row = document.createElement('div');
+    row.style.display='grid'; row.style.gridTemplateColumns='1fr 1fr'; row.style.gap='8px'; row.style.marginTop='6px';
+
+    const bMiles = document.createElement('button'); bMiles.textContent='CHECK MILES'; bMiles.onclick = ()=>checkMiles(data, bMiles);
+    const bIFTA  = document.createElement('button'); bIFTA.textContent='IFTA SPLIT'; bIFTA.onclick = ()=>checkIFTA(data, bIFTA);
+    const bSave  = document.createElement('button'); bSave.textContent='SAVE LEAD'; bSave.onclick = ()=>{ bSave.textContent='Saved ('+saveLeadFromItem(data)+')'; setTimeout(()=> bSave.textContent='SAVE LEAD', 2500); };
+    const bScore = document.createElement('button'); bScore.textContent='SCORE & COUNTER'; bScore.onclick = ()=>scoreAndCounter(data, bScore);
+    const bHide  = document.createElement('button'); bHide.textContent='HIDE / BLOCK'; bHide.onclick = ()=>{ const bl = blockSender(data); card.style.display='none'; console.log('Blocklist:', bl); };
+
+    row.appendChild(bMiles); row.appendChild(bIFTA); row.appendChild(bSave); row.appendChild(bScore);
+    const row2 = document.createElement('div'); row2.style.display='grid'; row2.style.gridTemplateColumns='1fr 1fr'; row2.style.gap='8px'; row2.appendChild(bHide);
+
+    card.appendChild(row); card.appendChild(row2);
+  }
+}
+
+// Hook after renderCards
+const _renderCards = renderCards;
+renderCards = function(obj){
+  _renderCards(obj);
+  // add data payload to each card for buttons
+  const root = document.getElementById('cards');
+  let i=0;
+  for (const section of root.querySelectorAll('h3 + div, h3 + div + div')){ /* noop */ }
+  // Tag every card
+  for (const card of root.querySelectorAll('div')){
+    if (card.style && card.style.borderRadius==='10px' && card.style.padding==='10px'){
+      card.dataset.kind='card';
+    }
+  }
+  // Attach JSON payloads to cards in order
+  const payloads = [...(obj.doable||[]), ...(obj.maybe||[]), ...(obj.skip||[])];
+  let pidx = 0;
+  for (const card of root.querySelectorAll('[data-kind="card"]')){
+    if (payloads[pidx]) card.setAttribute('data-item', JSON.stringify(payloads[pidx]));
+    pidx++;
+  }
+  enhanceCards();
+};
+
+</script>
+</body>
+</html>

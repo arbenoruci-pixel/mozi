@@ -1,0 +1,186 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Narta IFTA — Private</title>
+  <style>
+    body{font-family:system-ui, -apple-system, Segoe UI, Roboto, sans-serif;background:#0b0b0b;color:#eaeaea;margin:0;padding:16px;}
+    h1{margin:0 0 12px 0;} .muted{opacity:.7;font-size:14px;}
+    label{display:block;margin:10px 0 4px;} input,textarea,button{width:100%;padding:10px;border-radius:8px;border:1px solid #333;background:#111;color:#eee;}
+    textarea{min-height:160px;white-space:pre;}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    .actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;}
+    .pill{display:inline-block;background:#111;border:1px solid #333;border-radius:999px;padding:6px 10px;margin:2px 4px;font-size:12px;}
+    table{width:100%;border-collapse:collapse;margin-top:14px;font-size:14px;}
+    th,td{border:1px solid #333;padding:8px;text-align:left;} th{background:#111;}
+    .right{text-align:right;}
+    .ok{color:#10b981;} .warn{color:#f59e0b;} .err{color:#ef4444;}
+    .footer{margin-top:18px;opacity:.7;font-size:12px;}
+    .card{border:1px solid #333;border-radius:12px;padding:12px;margin:10px 0;background:#0f0f0f;}
+  </style>
+</head>
+<body>
+  <h1>Narta IFTA — Private</h1>
+  <div class="muted">Keep for personal use. Data stays in your browser except Google route lookups.</div>
+
+  <div class="card">
+    <label>Private Key (anything you choose; stored locally)</label>
+    <input id="privKey" placeholder="e.g., ben-2025-secret">
+    <div class="row">
+      <div>
+        <label>Paste trips (CSV / one per line)</label>
+        <textarea id="paste" placeholder="Pickup,Delivery,Date(optional)\nChicago, IL, Lincoln, NE, 2025-10-01\nGreen Bay, WI, Chicago, IL"></textarea>
+      </div>
+      <div>
+        <label>Or upload CSV</label>
+        <input id="file" type="file" accept=".csv">
+        <label style="margin-top:12px;">Round trip?</label>
+        <select id="rt"><option value="1">Yes — count round trip</option><option value="0">No — one way only</option></select>
+        <label>Max samples per leg (IFTA state split)</label>
+        <input id="samples" type="number" value="60" min="20" max="120">
+        <div class="actions">
+          <button id="run">RUN IFTA</button>
+          <button id="export">EXPORT CSV</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="status" class="muted"></div>
+
+  <table id="tbl" style="display:none">
+    <thead>
+      <tr><th>#</th><th>Pickup</th><th>Delivery</th><th>Date</th><th class="right">Miles</th><th>Top States</th></tr>
+    </thead>
+    <tbody></tbody>
+    <tfoot>
+      <tr><th colspan="4" class="right">TOTAL</th><th id="totMiles" class="right">0</th><th id="totStates"></th></tr>
+    </tfoot>
+  </table>
+
+  <div class="footer">Tip: Prefer CSV with columns <code>Pickup</code>, <code>Delivery</code>, <code>Date</code>. We’ll do Google-based state splits.</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+(function init(){
+  const pk = localStorage.getItem('narta_ifta_key') || '';
+  $('privKey').value = pk;
+  const saved = localStorage.getItem('narta_ifta_paste') || '';
+  if (saved) $('paste').value = saved;
+})();
+
+function setStatus(txt, cls=''){ const s=$('status'); s.textContent=txt; s.className='muted '+cls; }
+
+function parseCSVText(text){
+  // Simple CSV: split lines, then split by comma; supports quoted with commas minimally
+  const rows = []; const lines = text.split(/\r?\n/).filter(Boolean);
+  for (const line of lines){
+    let cells = []; let cur=''; let q=false;
+    for (let i=0;i<line.length;i++){
+      const ch=line[i];
+      if (ch==='\"'){ q = !q; continue; }
+      if (ch===',' && !q){ cells.push(cur.trim()); cur=''; continue; }
+      cur += ch;
+    }
+    cells.push(cur.trim());
+    rows.push(cells);
+  }
+  return rows;
+}
+
+async function* iterTripsFromInputs(){
+  // From paste
+  const pasted = $('paste').value.trim();
+  if (pasted){
+    localStorage.setItem('narta_ifta_paste', pasted);
+    const rows = parseCSVText(pasted);
+    for (const r of rows){
+      if (!r.length) continue;
+      const [pickup, delivery, date] = r;
+      if (pickup && delivery) yield { pickup, delivery, date: (date||'') };
+    }
+  }
+  // From file
+  const f = $('file').files[0];
+  if (f){
+    const text = await f.text();
+    const rows = parseCSVText(text);
+    // Header detection
+    const head = rows[0].map(x=>x.toLowerCase());
+    let start = 0;
+    if (head.includes('pickup') || head.includes('origin') || head.includes('from')) start = 1;
+    for (let i=start;i<rows.length;i++){
+      const r = rows[i]; if (!r?.length) continue;
+      let pickup=r[0], delivery=r[1], date=r[2]||'';
+      if (head.includes('pickup')){ // try by name
+        const idxP = head.indexOf('pickup'); const idxD = head.indexOf('delivery');
+        const idxO = head.indexOf('origin');  const idxTo = head.indexOf('to');
+        const idxDate = head.indexOf('date');
+        pickup = r[idxP>-1?idxP:(idxO>-1?idxO:0)];
+        delivery = r[idxD>-1?idxD:(idxTo>-1?idxTo:1)];
+        date = idxDate>-1 ? r[idxDate] : (r[2]||'');
+      }
+      if (pickup && delivery) yield { pickup, delivery, date };
+    }
+  }
+}
+
+function sumStates(memo, byState){
+  for (const [s,m] of Object.entries(byState||{})){
+    memo[s] = (memo[s]||0) + Number(m||0);
+  }
+}
+
+$('run').addEventListener('click', async ()=>{
+  const key = $('privKey').value.trim();
+  localStorage.setItem('narta_ifta_key', key || '');
+  setStatus('Running…', 'warn');
+
+  const roundTrip = $('rt').value === '1';
+  const maxSamples = Math.max(20, Math.min(120, Number($('samples').value||60)));
+  const tbody = $('tbl').querySelector('tbody'); tbody.innerHTML='';
+  $('tbl').style.display='table';
+
+  let idx=0, total=0; const stateTotals={};
+  for await (const t of iterTripsFromInputs()){
+    idx++;
+    const r = await fetch('/api/ifta', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ orig: t.pickup, dest: t.delivery, roundTrip, maxSamples })
+    });
+    const j = await r.json();
+    if (!j.ok){ setStatus('Error on row '+idx+': '+(j.error||'IFTA failed'),'err'); continue; }
+
+    total += Number(j.totalMiles||0);
+    sumStates(stateTotals, j.byState||{});
+    const top = Object.entries(j.byState||{}).sort((a,b)=> b[1]-a[1]).slice(0,3).map(([s,m])=>`${s}:${m}`).join(' ');
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${idx}</td><td>${t.pickup}</td><td>${t.delivery}</td><td>${t.date||''}</td><td class="right">${j.totalMiles}</td><td>${top}</td>`;
+    tbody.appendChild(tr);
+    setStatus(`Processed ${idx} trip(s)…`, 'ok');
+  }
+
+  $('totMiles').textContent = Math.round(total);
+  const topS = Object.entries(stateTotals).sort((a,b)=> b[1]-a[1]).slice(0,5).map(([s,m])=>`${s}:${m}`).join('  ');
+  $('totStates').textContent = topS || '';
+  setStatus(`Done. Total miles: ${Math.round(total)}`, 'ok');
+});
+
+$('export').addEventListener('click', ()=>{
+  const rows = [['#','Pickup','Delivery','Date','Miles','Top States', 'Generated At']];
+  const now = new Date().toISOString();
+  document.querySelectorAll('#tbl tbody tr').forEach(tr=>{
+    const cells = [...tr.children].map(td=> td.textContent);
+    rows.push([...cells, now]);
+  });
+  const csv = rows.map(r=> r.map(x=> `"${String(x).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'ifta_export.csv'; a.click();
+});
+
+</script>
+</body>
+</html>
