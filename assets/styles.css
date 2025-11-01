@@ -1,0 +1,24 @@
+/* NARTA Clean A10 */
+:root{--pad:14px;--r:12px;--bg:#0b0f14;--fg:#e8eefc;--card:#121826;--muted:#9aa3b2;--b:#23324a;--acc:#22c55e}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--fg)}
+header{padding:18px var(--pad);font-weight:800;font-size:18px;background:#0f1420;border-bottom:1px solid #1f2a40}
+main{padding:var(--pad);max-width:1100px;margin:0 auto;display:grid;gap:14px}
+.card{background:var(--card);border:1px solid var(--b);border-radius:var(--r);padding:var(--pad)}
+.grid3{display:grid;gap:12px}
+@media(min-width:980px){.grid3{grid-template-columns:1fr 1fr 1fr}}
+label{font-size:12px;color:var(--muted);margin-bottom:6px;display:block}
+input,textarea,select{width:100%;background:#0a0f18;color:var(--fg);border:1px solid #27354f;border-radius:10px;padding:10px 12px;font-size:15px}
+textarea{min-height:160px;resize:vertical}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+button{appearance:none;border:1px solid #2a3042;background:#0e1524;color:var(--fg);padding:10px 14px;border-radius:10px;font-size:15px;cursor:pointer}
+button.primary{background:var(--acc);border-color:var(--acc);color:#052313;font-weight:800}
+.pill{display:inline-block;padding:6px 10px;border:1px solid #2a3042;border-radius:999px;color:#b9c3d6;font-size:12px;text-decoration:none}
+.badge{display:inline-block;border:1px solid #2a3042;padding:3px 8px;border-radius:999px;margin-right:6px;font-size:12px}
+.small{font-size:12px} .muted{color:var(--muted)}
+.inline{display:inline-flex;align-items:center;gap:6px}
+.home{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+.tile{display:block;background:#0e1524;border:1px solid #26324a;border-radius:14px;padding:16px 14px;text-decoration:none;color:var(--fg)}
+.tile .t{font-weight:800;margin-bottom:6px}
+.tile .s{color:#9aa3b2;font-size:13px}
+footer{padding:0 var(--pad) 14px}

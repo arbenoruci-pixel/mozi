@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Analyzer — NARTA</title>
+<link rel="stylesheet" href="/assets/styles.css?v=10">
+<script defer src="/assets/app.js?v=10"></script>
+<script defer src="/assets/parser.js?v=10"></script>
+<script defer src="/assets/analyzer.js?v=10"></script>
+<script defer src="/assets/which_running.js?v=10"></script>
+</head>
+<body>
+<header>Parse • AI Analyzer</header>
+<main>
+  <section class="card">
+    <label>Paste freight email</label>
+    <textarea id="email_text" placeholder="Paste the broker/shipper email here…"></textarea>
+    <div class="actions">
+      <button id="btn_parse" class="primary">Parse</button>
+      <button id="btn_clear">Clear</button>
+      <a href="/" class="pill">Home</a>
+      <button id="btn_fill_demo">Fill Demo</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="grid3">
+      <div><label>Pickup</label><input id="pickup" placeholder="City, ST [ZIP]"></div>
+      <div><label>Delivery</label><input id="delivery" placeholder="City, ST [ZIP]"></div>
+      <div><label>Date / Time</label><input id="date" placeholder="Oct 30, 2025 0830"></div>
+    </div>
+    <div class="grid3" style="margin-top:10px">
+      <div><label>Equipment</label><input id="equipment" placeholder="Power Only, 40’ container"></div>
+      <div><label>Container Size</label><select id="cntr_size"><option value="">Auto</option><option>20</option><option selected>40</option><option>45</option></select></div>
+      <div><label>Lane Type</label><input id="lane_type" placeholder="auto"></div>
+    </div>
+    <div class="small badges">
+      <span class="badge" id="tag_port">Port: —</span>
+      <span class="badge" id="tag_rail">Rail: —</span>
+      <span class="badge" id="tag_flags">Flags: —</span>
+      <span class="badge" id="badge_round">Miles used: 0</span>
+      <label class="inline"><input type="checkbox" id="roundtrip"> Round trip (2× miles)</label>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="grid3">
+      <div><label>Customer All-in (Gross $)</label><input id="gross" inputmode="decimal" placeholder="auto if blank"></div>
+      <div><label>Miles (one-way)</label><input id="miles" inputmode="decimal" placeholder="GET if empty"></div>
+      <div><label>Pickup Time</label><input id="pickup_time" placeholder="0830"></div>
+    </div>
+    <div class="actions">
+      <button id="btn_get_miles">GET MILES</button>
+      <button id="btn_estimate" class="primary">Estimate Market + Offers</button>
+      <span class="pill" id="sel_offer_pill">Selected: —</span>
+    </div>
+  </section>
+
+  <section class="card" id="offers_container">
+    <div id="offers_panel" class="small muted">Offers will appear here…</div>
+  </section>
+
+  <section class="card">
+    <label>Parsed JSON (debug)</label>
+    <pre id="preview" class="small">{}</pre>
+  </section>
+</main>
+
+<script>
+(function(){ if(document.getElementById('a9_badge'))return;
+  const b=document.createElement('div');b.id='a9_badge';b.textContent='ANALYZER A9 ACTIVE';
+  Object.assign(b.style,{position:'fixed',right:'12px',bottom:'12px',zIndex:99999,background:'#10b981',color:'#00110a',padding:'8px 12px',borderRadius:'10px',fontWeight:'700',fontFamily:'system-ui,sans-serif',boxShadow:'0 6px 20px rgba(0,0,0,.25)'});
+  document.body.appendChild(b);
+})();
+</script>
+</body>
+</html>

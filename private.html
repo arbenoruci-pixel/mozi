@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Private Tools — NARTA</title>
+<link rel="stylesheet" href="/assets/styles.css?v=10">
+<script defer src="/assets/which_running.js?v=10"></script>
+</head>
+<body>
+<header>Private Tools (PIN)</header>
+<main>
+  <section class="card">
+    <label>Enter PIN</label>
+    <input id="pin" placeholder="****" inputmode="numeric" maxlength="6">
+    <div class="actions">
+      <button id="btn_unlock" class="primary">Unlock</button>
+      <a href="/" class="pill">Home</a>
+    </div>
+    <div id="priv_panel" style="display:none;margin-top:10px">
+      <ul>
+        <li><a href="#" class="pill">IFTA Calculator</a></li>
+        <li><a href="#" class="pill">Logbook Helper</a></li>
+      </ul>
+    </div>
+  </section>
+</main>
+<script>
+document.getElementById('btn_unlock').onclick = ()=>{
+  const ok = (document.getElementById('pin').value||'').trim() === (localStorage.getItem('narta_pin')||'2380');
+  if(ok){ document.getElementById('priv_panel').style.display='block'; } else { alert('Wrong PIN'); }
+};
+</script>
+</body>
+</html>
