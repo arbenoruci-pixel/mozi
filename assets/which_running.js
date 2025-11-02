@@ -1,9 +1,11 @@
+// Tiny loader list helper
 (function(){
-  const id='which_running_v10';
-  if(document.getElementById(id)) return;
-  const el=document.createElement('div'); el.id=id;
-  el.style.cssText='position:fixed;left:12px;bottom:12px;background:#052313;color:#bfffd0;border:1px solid #1b3f2a;padding:8px 10px;border-radius:10px;font:12px system-ui;z-index:99999;max-width:60vw;';
-  const scripts=[...document.scripts].map(s=>s.src||'(inline)').filter(Boolean);
-  el.innerHTML='<b>Loaded scripts</b><br>'+scripts.map(s=>s.split('/').pop()).join('<br>');
-  document.addEventListener('DOMContentLoaded',()=>document.body.appendChild(el));
+  try{
+    const list = Array.from(document.querySelectorAll('script[src]')).map(s=>s.getAttribute('src'));
+    const wrap = document.createElement('div');
+    wrap.style.cssText='position:fixed;left:10px;bottom:12px;background:#081;border:2px solid #0f4;padding:8px 10px;color:#fff;font:12px/1.3 monospace;z-index:99999;border-radius:9px;max-width:88vw;';
+    wrap.innerHTML = '<b>Loaded scripts</b><br>'+list.map(s=>s.replace(location.origin,'')).join('<br>');
+    document.body.appendChild(wrap);
+    setTimeout(()=>wrap.remove(), 5000);
+  }catch{}
 })();
