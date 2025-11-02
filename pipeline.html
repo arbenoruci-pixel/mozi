@@ -1,0 +1,43 @@
+
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pipeline — NARTA</title>
+<link rel="stylesheet" href="/assets/styles.css?v=12">
+<script defer src="/assets/pipeline.js?v=12"></script>
+</head><body>
+<header>Pipeline — Saved Offers</header>
+<main>
+  <section class="card">
+    <div class="grid2">
+      <div>
+        <label>Status Filter</label>
+        <select id="f_status">
+          <option value="">All</option>
+          <option>New</option><option>Counter Sent</option><option>Waiting</option><option>Won</option><option>Lost</option>
+        </select>
+      </div>
+      <div>
+        <label>Search (From/To)</label>
+        <input id="f_q" placeholder="e.g., Chicago or Bristol">
+      </div>
+    </div>
+    <div style="margin-top:10px">
+      <button id="btn_export" class="primary">Export JSON</button>
+      <a class="pill" href="/analyzer.html">Back to Analyzer</a>
+      <a class="pill" href="/">Home</a>
+    </div>
+  </section>
+
+  <section class="card">
+    <table>
+      <thead>
+        <tr>
+          <th>When</th><th>Status</th><th>From → To</th><th>Size</th><th>Miles</th>
+          <th class="right">Gross</th><th class="right">Carrier</th><th class="right">Profit</th><th>Prob</th>
+        </tr>
+      </thead>
+      <tbody id="pipe_tbody"></tbody>
+    </table>
+  </section>
+</main>
+</body></html>

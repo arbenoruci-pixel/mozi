@@ -1,168 +1,213 @@
-// Analyzer core (A10): wiring + miles + offers + RT chooser + clear
+
 (function(){
-  const $ = window.$, $$ = window.$$;
+  const $ = (s)=>document.querySelector(s);
 
-  const email = $('#email_text');
-  const pickup = $('#pickup');
-  const delivery = $('#delivery');
-  const date = $('#date');
-  const equip = $('#equipment');
-  const size = $('#cntr_size');
-  const laneType = $('#lane_type');
-  const badgeRound = $('#badge_round');
-  const roundtrip = $('#roundtrip');
-  const miles = $('#miles');
-  const gross = $('#gross');
-  const pickupTime = $('#pickup_time');
-  const preview = $('#preview');
-  const offersPanel = $('#offers_panel');
+  const emailEl = $('#email_text');
+  const btnParse = $('#btn_parse');
+  const btnClear = $('#btn_clear');
 
-  // DEMO fill
-  $('#btn_fill_demo')?.addEventListener('click', ()=>{
-    email.value = `Please reply with your carrier pay and availability.
+  const pickupEl   = $('#pickup');
+  const deliveryEl = $('#delivery');
+  const dateEl     = $('#date');
+  const equipEl    = $('#equipment');
+  const sizeEl     = $('#cntr_size');
+  const laneEl     = $('#lane_type');
 
-Lane: from Chicago, IL 60632 to Bristol, IN 46507
-Date/Time: Oct 30, 2025 0830
-Equipment: Power Only, 40HC
-All-in: $1,450 flat
-Thanks`;
-  });
+  const milesEl    = $('#miles');
+  const grossEl    = $('#gross');
+  const roundChk   = $('#roundtrip');
+  const usedBadge  = $('#badge_round');
 
-  function setUsed(n){ if(badgeRound) badgeRound.textContent = 'Miles used: ' + (Number(n||0)); }
-  if (!miles.dataset) miles.dataset = {};
-  miles.dataset.oneway = miles.dataset.oneway || '';
+  const btnGetMiles = $('#btn_get_miles');
+  const btnEst      = $('#btn_estimate_market');
+  const btnAI       = $('#btn_ai_contra');
 
-  // Parse
-  $('#btn_parse')?.addEventListener('click', ()=>{
-    const obj = window.moziParseEmail(email.value||'');
-    if (obj.pickup) pickup.value = obj.pickup;
-    if (obj.delivery) delivery.value = obj.delivery;
-    if (obj.date) date.value = obj.date;
-    if (obj.equipment) equip.value = obj.equipment;
-    if (obj.size) size.value = obj.size;
-    if (obj.gross && !gross.value) gross.value = obj.gross;
+  const offersCard  = $('#offers_card');
+  const offersBody  = $('#offers_body');
 
-    classifyLane();
-    preview.textContent = JSON.stringify(obj, null, 2);
-  });
+  const btnSave     = $('#btn_save_pipeline');
+  const selStatus   = $('#pipe_status');
+  const selOfferPill= $('#sel_offer_pill');
+
+  let selectedOffer = null;
+
+  function round2(n){ return Math.round((Number(n)||0)*100)/100; }
+  function setMilesUsed(n){ if(usedBadge) usedBadge.textContent = `Miles used: ${round2(n||0)}`; }
 
   // Clear
-  $('#btn_clear')?.addEventListener('click', ()=>{
-    email.value=''; [pickup,delivery,date,equip,laneType,miles,gross,pickupTime].forEach(x=>{ if(x) x.value=''; });
-    if (size) size.selectedIndex = 0;
-    offersPanel.textContent = 'Offers will appear here…';
-    setUsed(0);
-    preview.textContent='{}';
-  });
-
-  // Classify (simple)
-  function city(addr){ const m = String(addr||'').match(/^([^,]+),/); return m?m[1].trim():''; }
-  function st(addr){ const m = String(addr||'').match(/,\s*([A-Z]{2})\b/); return m?m[1]:''; }
-  const PORTS = ['Newark,NJ','Savannah,GA','Charleston,SC','Houston,TX','Norfolk,VA','Baltimore,MD','Tacoma,WA','Portland,OR'];
-  const RAILS = ['Cicero,IL','Chicago,IL','Bedford Park,IL','Joliet,IL','Columbus,OH','Haslet,TX','Dallas,TX','Edgerton,KS','Memphis,TN','Fairburn,GA','Seattle,WA'];
-  function isPort(a){const c=city(a),s=st(a);return PORTS.includes(c+','+s);}
-  function isRail(a){const c=city(a),s=st(a);return RAILS.includes(c+','+s);}
-  function excludeFLCA(a){return /,(?:FL|CA)\b/.test(String(a||''));}
-
-  function classifyLane(){
-    const from=pickup.value,to=delivery.value;
-    const fP=isPort(from), tP=isPort(to);
-    const fR=isRail(from), tR=isRail(to);
-    const flags = {port:!!(fP||tP), rail:!!(fR||tR), excluded:(excludeFLCA(from)||excludeFLCA(to))};
-    let lt='door → door';
-    if (fP && tR) lt='port → ramp';
-    else if (fR && tR) lt='ramp → ramp';
-    else if (fR && !tR && !tP) lt='ramp → door';
-    else if (fP && !tR) lt='port → door';
-    laneType.value = lt;
-    $('#tag_port').textContent='Port: '+(fP?'YES':tP?'YES':'—');
-    $('#tag_rail').textContent='Rail: '+(fR?'YES':tR?'YES':'—');
-    $('#tag_flags').textContent='Flags: '+(flags.excluded?'EXCLUDED FL/CA':'OK');
-    return flags;
-  }
-
-  // GET MILES with RT chooser
-  async function fetchMilesOneWay() {
-    const o=pickup.value?.trim(), d=delivery.value?.trim();
-    if (!o || !d) { alert('Enter Pickup and Delivery first.'); return null; }
-    try{
-      const res = await fetch('/api/miles',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pickup:o,delivery:d})});
-      const data = await res.json();
-      if (!res.ok || typeof data.miles !== 'number') throw new Error(data.error||'miles error');
-      return data.miles;
-    }catch(e){ console.error(e); alert('Miles API failed.'); return null; }
-  }
-  async function getMilesFlow(){
-    const isRT = window.confirm('Round trip miles?\nOK = Round trip (2×)\nCancel = One-way');
-    const one = await fetchMilesOneWay(); if(one==null) return;
-    miles.dataset.oneway = String(one); roundtrip.checked = !!isRT;
-    const used = isRT ? one*2 : one; miles.value = used; setUsed(used);
-  }
-  $('#btn_get_miles')?.addEventListener('click', (e)=>{ e.preventDefault(); getMilesFlow(); });
-  roundtrip?.addEventListener('change', ()=>{
-    const base = Number(miles.dataset.oneway||0);
-    const used = roundtrip.checked ? base*2 : base;
-    miles.value = base? used : ''; setUsed(used);
-  });
-  miles?.addEventListener('input', ()=>{
-    const v=Number(miles.value||0); miles.dataset.oneway=String(v||0); setUsed(roundtrip.checked? v*2 : v);
-  });
-
-  // Estimate Market + Offers (server → fallback)
-  function renderOffers(rows, usedMiles, g){
-    const html = `
-      <div style="font-weight:700;margin-bottom:6px">Suggested Carrier Offers</div>
-      <div class="small muted" style="margin-bottom:6px">Miles used: <b>${usedMiles}</b> • Gross: <b>$${(g||0).toLocaleString()}</b></div>
-      <table style="width:100%;border-collapse:collapse;font-size:13px">
-        <thead><tr>
-          <th>Tier</th><th class="right">Carrier</th><th class="right">Wall 10%</th>
-          <th class="right">Profit</th><th class="right">Narta 80%</th><th class="right">Lex 20%</th>
-        </tr></thead>
-        <tbody>${rows.map(r=>`
-          <tr>
-            <td>${r.tier}</td>
-            <td class="right">$${r.carrier.toLocaleString()}</td>
-            <td class="right">$${r.wall.toLocaleString()}</td>
-            <td class="right">$${r.profit.toLocaleString()}</td>
-            <td class="right">$${r.narta.toLocaleString()}</td>
-            <td class="right">$${r.lex.toLocaleString()}</td>
-          </tr>`).join('')}
-        </tbody>
-      </table>`;
-    offersPanel.innerHTML = html;
-  }
-
-  function localOffers(milesUsed, g){
-    const anchor = Math.max(400, milesUsed*3.0);
-    const tiers = [
-      {tier:'Fast Sell', mult:1.00},
-      {tier:'Target', mult:0.93},
-      {tier:'Stretch', mult:0.85},
-    ].map(t => {
-      const carrier = Math.round(anchor*t.mult);
-      const wall = Math.round((g||Math.round(anchor*1.2))*0.10);
-      const profit = Math.max(0, (g||Math.round(anchor*1.2)) - wall - carrier);
-      const narta = Math.round(profit*0.80);
-      const lex = Math.round(profit*0.20);
-      return {tier: t.tier, carrier, wall, profit, narta, lex};
+  btnClear?.addEventListener('click', ()=>{
+    if(emailEl) emailEl.value='';
+    ['pickup','delivery','date','equipment','cntr_size','lane_type','gross','miles','pickup_time'].forEach(id=>{
+      const el = document.getElementById(id);
+      if(!el) return;
+      if(el.tagName==='SELECT') el.selectedIndex=0; else el.value='';
     });
-    return tiers;
+    setMilesUsed(0);
+    offersCard.style.display='none'; offersBody.innerHTML='';
+    const preview=$('#preview'); if(preview) preview.textContent='{}';
+    selectedOffer = null; selOfferPill.textContent = 'Selected: —';
+  });
+
+  // Parse (requires window.NARTA_PARSER.extract)
+  btnParse?.addEventListener('click', ()=>{
+    const txt = emailEl?.value || '';
+    const out = (window.NARTA_PARSER||{}).extract?.(txt) || {};
+    if(out.pickup) pickupEl.value = out.pickup;
+    if(out.delivery) deliveryEl.value = out.delivery;
+    if(out.date) dateEl.value = out.date;
+    if(out.equipment) equipEl.value = out.equipment;
+    if(out.size) sizeEl.value = out.size;
+    if(out.lane) laneEl.value = out.lane;
+    if(out.gross && !grossEl.value) grossEl.value = out.gross;
+    const preview=$('#preview'); if(preview) preview.textContent = JSON.stringify(out,null,2);
+  });
+
+  // GET MILES (confirm for round trip)
+  btnGetMiles?.addEventListener('click', async ()=>{
+    const pickup = pickupEl.value?.trim();
+    const delivery = deliveryEl.value?.trim();
+    if(!pickup || !delivery){ alert('Enter Pickup and Delivery first.'); return; }
+    const isRT = window.confirm('Round trip miles?\nOK = Round trip (2×)\nCancel = One-way');
+    try{
+      const r = await fetch('/api/miles', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ pickup, delivery })
+      });
+      const j = await r.json();
+      if(!r.ok || typeof j.miles!=='number'){ alert('Miles failed. Check GOOGLE_MAPS_KEY.'); return; }
+      milesEl.dataset = milesEl.dataset||{};
+      milesEl.dataset.oneway = String(j.miles);
+      milesEl.value = isRT ? round2(j.miles*2) : round2(j.miles);
+      roundChk.checked = !!isRT;
+      setMilesUsed(milesEl.value);
+    }catch(e){ console.error(e); alert('Network error while fetching miles.'); }
+  });
+
+  // Heuristic per-mile
+  function heuristicPerMile(miles, equipment, size, lane){
+    let base = /ramp|port/i.test(lane)? 2.6 : 2.2;
+    if(miles<120) base += 0.25;
+    if(miles>500) base -= 0.10;
+    if(/power only/i.test(equipment)) base -= 0.10;
+    if(size==='20') base -= 0.05;
+    if(size==='45') base += 0.05;
+    return Math.max(base, 1.4);
   }
 
-  $('#btn_estimate')?.addEventListener('click', async (e)=>{
-    e.preventDefault();
-    const base = Number(miles.dataset.oneway||0);
-    const used = roundtrip.checked? base*2 : (Number(miles.value||0)||base);
-    const g = Number((gross.value||'').replace(/[^0-9.]/g,''))||0;
+  function mkTiers(marketCarrier, gross){
+    function split(C){
+      const lex10 = 0.10 * gross; // Lexington 10% of gross first
+      const profit = Math.max(gross - lex10 - C, 0);
+      return {
+        carrier: round2(C),
+        wall10: round2(lex10),
+        profit: round2(profit),
+        narta80: round2(profit*0.80),
+        lex20: round2(profit*0.20)
+      };
+    }
+    const fast = Math.max(marketCarrier * 0.94, 250);
+    const targ = Math.max(marketCarrier * 1.00, 300);
+    const stre = Math.max(marketCarrier * 1.06, 350);
+    return [
+      {tier:'Fast Sell', ...split(fast),  win:0.85},
+      {tier:'Target',    ...split(targ),  win:0.65},
+      {tier:'Stretch',   ...split(stre),  win:0.40},
+    ];
+  }
 
-    let rows=null;
-    try{
-      const r = await fetch('/api/market',{method:'POST',headers:{'Content-Type':'application/json'},body: JSON.stringify({
-        miles: base || used, roundTrip: roundtrip.checked, customerGross: g||undefined
-      })});
-      const j = await r.json();
-      if(r.ok && Array.isArray(j.tiers)) rows=j.tiers, renderOffers(rows, j.usedMiles, j.gross);
-    }catch(e){ console.warn('market API error', e); }
-    if(!rows){ const tiers = localOffers(used, g); renderOffers(tiers, used, g); }
+  // Estimate Market (heuristic only)
+  btnEst?.addEventListener('click', ()=>{
+    const miles = Number(milesEl.value||0);
+    const gross = Number(grossEl.value||0);
+    if(!miles) return alert('Enter miles first.');
+    if(!gross) return alert('Enter Gross first (customer all-in).');
+    const perMi = heuristicPerMile(miles, equipEl.value, sizeEl.value, laneEl.value);
+    const base  = miles * perMi;
+    const tiers = mkTiers(base, gross);
+    renderOffers(tiers, gross);
   });
+
+  // (Optional) AI counter — will replace tiers if /api/ai_contra_offer is wired
+  btnAI?.addEventListener('click', async ()=>{
+    const pickup = pickupEl.value?.trim();
+    const delivery = deliveryEl.value?.trim();
+    const miles = Number(milesEl.value||0);
+    const gross = Number(grossEl.value||0);
+    const equipment = equipEl.value||'';
+    const containerSize = sizeEl.value||'';
+    const laneType = laneEl.value||'';
+    const isIntermodal = /ramp|rail|port/i.test(laneType);
+
+    if(!pickup || !delivery || !miles || !gross) return alert('Fill Pickup, Delivery, Miles, and Gross first.');
+    btnAI.disabled = true; const old = btnAI.textContent; btnAI.textContent='Thinking…';
+    try{
+      const r = await fetch('/api/ai_contra_offer', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ pickup, delivery, miles, gross, equipment, containerSize, laneType, isIntermodal })
+      });
+      const j = await r.json();
+      if(!r.ok || !j?.tiers) throw new Error(j?.error||'AI error');
+      renderOffers(j.tiers, gross);
+    }catch(e){ console.error(e); alert('Could not get AI offers.'); }
+    finally{ btnAI.disabled=false; btnAI.textContent=old; }
+  });
+
+  function renderOffers(tiers, gross){
+    offersCard.style.display='block';
+    offersBody.innerHTML='';
+    selectedOffer = null; selOfferPill.textContent = 'Selected: —';
+    tiers.forEach((t, idx)=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${t.tier}</td>
+        <td class="right">$${(t.carrier||0).toFixed(0)}</td>
+        <td class="right">${Math.round((t.win||0)*100)}%</td>
+        <td class="right">$${(t.wall10||0).toFixed(0)}</td>
+        <td class="right">$${(t.profit||0).toFixed(0)}</td>
+        <td class="right">$${(t.narta80||0).toFixed(0)}</td>
+        <td class="right">$${(t.lex20||0).toFixed(0)}</td>
+        <td><button class="pick" data-idx="${idx}">Select</button></td>
+      `;
+      offersBody.appendChild(tr);
+    });
+    offersBody.querySelectorAll('.pick').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const idx = Number(btn.dataset.idx);
+        selectedOffer = tiers[idx];
+        selOfferPill.textContent = `Selected: ${selectedOffer.tier} ($${(selectedOffer.carrier||0).toFixed(0)})`;
+      });
+    });
+  }
+
+  // ===== Pipeline save (local only) =====
+  const PIPE_KEY = 'pipeline_v2';
+  function loadPipe(){ try { return JSON.parse(localStorage.getItem(PIPE_KEY)||'[]'); } catch { return []; } }
+  function savePipe(items){ localStorage.setItem(PIPE_KEY, JSON.stringify(items)); }
+
+  btnSave?.addEventListener('click', ()=>{
+    if(!selectedOffer){ alert('Select an offer first.'); return; }
+    const item = {
+      ts: new Date().toISOString(),
+      status: selStatus?.value || 'New',
+      from: pickupEl.value||'',
+      to: deliveryEl.value||'',
+      size: sizeEl.value||'',
+      equipment: equipEl.value||'',
+      miles: Number(milesEl.value||0),
+      gross: Number(grossEl.value||0),
+      offer: selectedOffer.tier,
+      carrier: Number(selectedOffer.carrier||0),
+      profit: Number(selectedOffer.profit||0),
+      narta: Number(selectedOffer.narta80||0),
+      lex: Number(selectedOffer.lex20||0),
+      wall: Number(selectedOffer.wall10||0),
+      win: Number(selectedOffer.win||0)
+    };
+    const items = loadPipe();
+    items.unshift(item);
+    savePipe(items);
+    alert('Saved to pipeline.');
+  });
+
 })();
