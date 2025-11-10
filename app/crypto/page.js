@@ -1,0 +1,1 @@
+export default function Crypto(){return (<main style={{padding:24}}><h1>Crypto Console (Ready)</h1><p>This route is fixed and will display live data in the next patch.</p></main>);}

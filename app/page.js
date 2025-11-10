@@ -1,0 +1,2 @@
+async function getHealth(){try{const r=await fetch('/api/health',{cache:'no-store'});return await r.json()}catch(e){return {ok:false,error:String(e)}}}
+export default async function Home(){const health=await getHealth();return (<main style={{padding:24}}><h1>MOZI — Deployed Correctly ✅</h1><ul><li><a href='/crypto'>/crypto</a></li><li><a href='/api/health'>/api/health</a></li></ul><pre style={{background:'#111',color:'#0f0',padding:12,borderRadius:8}}>{JSON.stringify(health,null,2)}</pre></main>);}
