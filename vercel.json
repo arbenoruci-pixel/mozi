@@ -4,3 +4,7 @@
   "outputDirectory": ".next",
   "rewrites": [{ "source": "/(.*)", "destination": "/" }]
 }
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/" }
+  ]
+}
