@@ -1,0 +1,60 @@
+Make my crypto app production-ready in ONE pass and deploy it to a permanent .replit.app domain.
+
+Requirements:
+
+1) Server & Binding
+- Ensure Express uses: const PORT = process.env.PORT || 5000;
+- Bind to 0.0.0.0: app.listen(PORT, '0.0.0.0', ...);
+- Keep CORS enabled for browser access.
+
+2) Routes (keep existing logic; don’t break anything)
+- GET /api/health → return { ok:true, msg:"healthy" }.
+- GET /api/signal?symbol=... → SUPPORT symbols: btc, eth, sol, xrp, ada, doge. If unsupported, return { ok:false, error:"unsupported symbol" } with HTTP 400. Always include a `time` field (ISO timestamp) in the JSON response.
+- GET /api/paper?symbol=... → ADD optional query params:
+   • stake (default 100)
+   • feeBps (default 20 = 0.20%)
+   • lookbackHours (default 24)
+  Simulate EMA(8/21)+RSI(14) on the last `lookbackHours` of hourly candles. Return:
+  { ok, symbol, trades[], pnlPct, pnlUsd, winRate, feePaidUsd, from, to }.
+  Cap trades at 100/run; if not enough data return { ok:false, error:"not enough data" }.
+- Add GET /api/test-alert → sends “Test alert from CryptoBot ✅” to Telegram if secrets set (see #4), else { ok:false, error:"telegram not configured" }.
+- Add GET /api/alerts/status → shows tracked symbols and last-sent signals.
+
+3) Dashboards
+- Create `/public/index.html` (API dashboard) listing the main links:
+  /api/health, /api/signal?symbol=btc, /api/signal?symbol=eth, /api/signal?symbol=sol, /api/paper?symbol=btc, and a link to /dashboard.html.
+- Create `/public/dashboard.html` with auto-refreshing cards for BTC, ETH, SOL showing: symbol, price, RSI, EMA fast, EMA slow, and final signal (BUY/SELL/HOLD). Color pill: BUY=green, SELL=red, HOLD=gray. Auto-refresh every 30s. Add a button that calls /api/test-alert and shows success/fail.
+- Serve static files: app.use(express.static('public'));
+- Set root route `/` to serve `/public/index.html`.
+
+4) Telegram Alerts (every 5 minutes)
+- Install any needed deps (e.g., node-cron and axios).
+- Add a scheduler: node-cron "*/5 * * * *" that checks signals for btc, eth, sol.
+- ONLY send a Telegram message when the signal for a symbol CHANGES (HOLD↔BUY/SELL).
+- Read secrets from Replit Secrets: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID.
+- Persist last-sent signals in `.data/lastSignals.json` (create if missing).
+- Do not send duplicate alerts when there’s no change.
+
+5) Project Settings
+- Ensure the run command is correct for dev: `node index.js`.
+- Ensure publishing uses Autoscale deployment with the same entry (node index.js) and port mapping (5000).
+- Keep all current APIs working exactly as before while adding the features above.
+
+6) Publish (Permanent URL)
+- Publish as Autoscale and provide a permanent .replit.app domain (e.g., https://nodejs-arbenoruci.replit.app).
+- After deployment, PRINT the exact public URL and open it.
+- Verify externally (not localhost):
+  • /  shows API dashboard
+  • /dashboard.html shows cards and auto-refreshes
+  • /api/health returns JSON
+  • /api/signal?symbol=btc returns JSON with price + signal + time
+  • /api/paper?symbol=btc returns the enhanced stats JSON
+
+7) Documentation
+- Update README with a "Production" section including:
+  - Permanent public URL
+  - Example links for all routes
+  - Note about adding TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in Secrets
+  - Example test link: /api/test-alert
+
+When finished, confirm success with the final .replit.app URL and that all endpoints and dashboards work externally.

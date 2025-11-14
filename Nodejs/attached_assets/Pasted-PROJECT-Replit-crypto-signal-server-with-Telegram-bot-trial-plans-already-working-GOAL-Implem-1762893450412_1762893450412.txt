@@ -1,0 +1,91 @@
+PROJECT: Replit crypto-signal server with Telegram bot (trial + plans already working).
+GOAL: Implement three upgrades in order: (1) Faster Data, (2) Strategy Engine v2, (3) Market Context.
+
+ENV/Assumptions
+- Keep existing endpoints compatible (/api/signal, /api/paper, /api/health, /api/symbols, /dashboard.html).
+- Symbols we monitor: BTC, ETH, SOL, XRP, ADA, DOGE, BNB, LTC, MATIC, AVAX, DOT, LINK.
+- Keep everything configurable via .env; do NOT break my current deployment.
+
+========================
+PACK 1 — FASTER DATA LAYER
+========================
+1) Add Binance WebSocket price stream for the symbols using USDT pairs (e.g., BTCUSDT).
+2) Keep current HTTP price fetch (CryptoCompare) as fallback with exponential backoff retry.
+3) Maintain an in-memory OHLC cache per symbol:
+   - timeframes: 1m and 5m (at minimum), rolling 500 bars
+   - on each WS tick aggregate into OHLC; if WS down, backfill with HTTP.
+4) New endpoints:
+   - GET /api/price?symbol=btc        -> latest price + source ("ws" or "http")
+   - GET /api/ohlc?symbol=btc&tf=1m   -> last N bars from cache
+   - GET /api/metrics                 -> last tick time per symbol, data source, error counts
+5) Config flags in .env (default on):
+   - BINANCE_WS=on
+   - HTTP_FALLBACK=on
+6) Rate-limit external calls to stay under free-tier limits.
+
+=============================
+PACK 2 — STRATEGY ENGINE v2
+=============================
+1) Indicators: EMA(8/21/50/200), RSI(14), MACD(12,26,9), Bollinger(20,2), ATR(14).
+2) Timeframes to compute: 1m, 5m, 15m, 1h (use OHLC cache; fetch if cold).
+3) Per-timeframe rules:
+   - Trend: EMA8>EMA21>EMA50 bullish; inverse bearish.
+   - RSI: >60 supports BUY; <40 supports SELL; 40–60 neutral.
+   - MACD: line>signal bullish, <signal bearish; histogram confirms.
+   - Bollinger: close above upper -> overbought; below lower -> oversold; gate by RSI to avoid noise.
+4) Voting: indicators + timeframes produce BUY/SELL/HOLD + a confidence score (0–100).
+5) Plans mapping:
+   - short  = heavier weights on 1m/5m; tighter ATR-based stops
+   - mid    = balance 5m/15m
+   - long   = heavier weight on 1h; wider ATR stops
+6) Endpoints:
+   - GET /api/signal?symbol=btc
+       -> { state, confidence, rsi, emas, macd, bb, atr, tf_votes, plan:"default" }
+   - GET /api/plan-signal?symbol=btc&plan=short|mid|long
+       -> plan-weighted result + suggested SL/TP from ATR (see Pack 3).
+7) Backtest utility:
+   - Run 180d on 1h bars; output metrics {CAGR, max_drawdown, win_rate, trades, sharpe}
+   - Save to /data/backtests.json
+   - Endpoint: GET /api/strategy/report?symbol=btc
+
+=====================================
+PACK 3 — MARKET CONTEXT & SAFE ALERTS
+=====================================
+1) News sentiment:
+   - Integrate a free source (CryptoPanic API or RSS) -> simple sentiment score per symbol (−1..+1) over last 24h.
+   - Blend ±10 points into confidence (clamped 0–100). Expose GET /api/sentiment?symbol=btc.
+2) Funding rate (if free source available, e.g., Binance futures):
+   - Store latest funding per symbol; apply small confidence modifier (+/- up to 5).
+3) Risk & UX improvements:
+   - ATR-based SL/TP suggestions:
+     * Long: SL = price - 1.5*ATR, TP = price + 2*ATR
+     * Short: mirror accordingly
+   - Cooldown: suppress duplicate Telegram alerts for the same symbol/plan within 10 minutes.
+   - Daily digest (08:00 local server time): summary to each active user with current states and (if enabled) paper PnL.
+4) Optional Paper Trading:
+   - Endpoints:
+     * POST /api/paper/place {symbol, side, size}
+     * GET  /api/paper/positions
+     * GET  /api/paper/pnl
+   - Persist per-user in a lightweight store (users.json or simple db).
+5) Admin .env toggles:
+   - NEWS_SENTIMENT=on
+   - FUNDING=on
+   - PAPER_TRADING=off (default)
+   - ALERT_COOLDOWN_MIN=10
+
+================
+ACCEPTANCE TESTS
+================
+- /api/health -> ok:true
+- /api/metrics -> shows WS "lastTick" times updating and source=ws
+- /api/price?symbol=btc -> returns price + source
+- /api/ohlc?symbol=btc&tf=1m -> returns recent bars (>=100)
+- /api/signal?symbol=eth -> includes confidence and all indicators
+- /api/plan-signal?symbol=btc&plan=short -> includes plan, confidence, SL/TP
+- /api/sentiment?symbol=btc -> score in [-1,1]
+- Backtest endpoint returns metrics object
+- Telegram alerts include: symbol, state, confidence, plan, SL/TP; no spam within cooldown
+- Daily digest message appears at 08:00
+
+Please implement Pack 1 → Pack 2 → Pack 3 in that order, keep code clean, and update README with usage and new env vars. Do not break existing routes or the trial/plan system.

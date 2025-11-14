@@ -1,0 +1,24 @@
+[
+  {
+    "chat_id": 7302815056,
+    "username": "xxxxxxxdrh",
+    "first_name": "S",
+    "plan": "trial",
+    "strategy": "swing",
+    "referred_by": null,
+    "created_at": "2025-11-11T19:50:04.419Z",
+    "expires_at": "2025-11-16T19:50:04.419Z",
+    "trial_notified": false
+  },
+  {
+    "chat_id": 6121852400,
+    "username": "",
+    "first_name": "Arben",
+    "plan": "trial",
+    "strategy": "swing",
+    "referred_by": null,
+    "created_at": "2025-11-11T19:50:06.080Z",
+    "expires_at": "2025-11-16T19:50:06.080Z",
+    "trial_notified": false
+  }
+]

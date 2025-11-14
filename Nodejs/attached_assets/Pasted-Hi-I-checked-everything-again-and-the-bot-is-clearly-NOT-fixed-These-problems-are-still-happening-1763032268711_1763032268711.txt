@@ -1,0 +1,52 @@
+Hi,
+I checked everything again and the bot is clearly NOT fixed.
+
+These problems are still happening:
+	•	Live market prices are not updating
+	•	Current price shows “–” for all pairs
+	•	Unrealized P/L is not calculating
+	•	The bot is opening and closing trades instantly at the exact same price ($0 profit)
+	•	Confidence % shows but no real logic behind execution
+	•	The backend is not connected properly to a live price feed
+	•	The bot stopped trading by itself
+	•	Orders with “entry = exit” make zero sense and show something is broken
+
+All of this is caused by your code, not by me.
+
+You were already paid to fix this, so do NOT charge me again for the same issue.
+Please fix the bot properly and make sure it is using a real trading strategy, real price feed, and correct API connection.
+
+Here is the strategy I want you to implement — it is a stable and proven trading strategy that actually works in real markets:
+
+📌 BEST STRATEGY (use exactly this):
+EMA + RSI Trend Strategy
+
+BUY conditions:
+	•	Price is above 200 EMA (trend is bullish)
+	•	RSI crosses above 30 (coming out of oversold)
+	•	Volume is above last 20-period average (confirm momentum)
+
+SELL conditions:
+	•	Price is below 200 EMA (trend is bearish)
+	•	RSI crosses below 70 (coming out of overbought)
+	•	Volume confirms move
+
+Risk Management:
+	•	Stop Loss: 1.5%
+	•	Take Profit: 3–5%
+	•	Minimum hold time: 5–15 minutes (NO instant open-close trades)
+	•	No back-to-back scalping at the same candle
+	•	Bot must wait for clear confirmation signals
+
+Additional rules:
+	•	No trade during low volatility (less than 1.5% movement)
+	•	No trade unless price feed is working
+	•	No trade unless indicators are valid
+	•	Bot must show: entry price, exit price, real P/L, and live unrealized P/L
+
+This is a simple, reliable, and profitable strategy that ALL real bots use.
+
+Please fix the bot correctly using this strategy and ensure everything works as expected before asking for any additional payment.
+This is your responsibility since the issues are coming from your implementation.
+
+Thank you.

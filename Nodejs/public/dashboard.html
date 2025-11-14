@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crypto Signal Dashboard</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+      color: #fafafa;
+      padding: 24px;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .subtitle {
+      color: #999;
+      font-size: 0.9rem;
+    }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px;
+      margin-bottom: 32px;
+    }
+    .card {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 24px;
+      backdrop-filter: blur(10px);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .symbol {
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: #fbbf24;
+    }
+    .signal {
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-weight: bold;
+      font-size: 1.1rem;
+    }
+    .signal.BUY {
+      background: #10b981;
+      color: white;
+    }
+    .signal.SELL {
+      background: #ef4444;
+      color: white;
+    }
+    .signal.HOLD {
+      background: #6b7280;
+      color: white;
+    }
+    .price {
+      font-size: 2rem;
+      font-weight: bold;
+      margin-bottom: 16px;
+      color: #9be7ff;
+    }
+    .metrics {
+      display: grid;
+      gap: 12px;
+    }
+    .metric {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .metric-label {
+      color: #999;
+      font-size: 0.9rem;
+    }
+    .metric-value {
+      font-weight: 600;
+      color: #fafafa;
+    }
+    .loading {
+      text-align: center;
+      padding: 48px;
+      color: #999;
+    }
+    .error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid #ef4444;
+      border-radius: 8px;
+      padding: 16px;
+      color: #fca5a5;
+      text-align: center;
+    }
+    .status-bar {
+      text-align: center;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      font-size: 0.85rem;
+      color: #999;
+    }
+    .refresh-indicator {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      background: #10b981;
+      border-radius: 50%;
+      margin-right: 8px;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .strategy-tabs {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+    }
+    .tab-btn {
+      padding: 12px 24px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.05);
+      color: #999;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 0.9rem;
+    }
+    .tab-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fafafa;
+    }
+    .tab-btn.active {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-color: #667eea;
+    }
+    .strategy-badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .strategy-badge.day {
+      background: #f59e0b;
+      color: white;
+    }
+    .strategy-badge.swing {
+      background: #3b82f6;
+      color: white;
+    }
+    .strategy-badge.long {
+      background: #10b981;
+      color: white;
+    }
+    .paper-trading-link {
+      display: inline-block;
+      margin-top: 16px;
+      padding: 12px 24px;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: white;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    }
+    .paper-trading-link:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🚀 Crypto Signal Dashboard</h1>
+      <p class="subtitle">Multi-Strategy Trading Signals: Day Trading • Swing Trading • Long-Term</p>
+      <a href="/paper-trading.html" class="paper-trading-link">
+        💰 View Live Paper Trading ($1000 Challenge)
+      </a>
+    </header>
+
+    <div class="strategy-tabs">
+      <button class="tab-btn" data-strategy="all">All Strategies</button>
+      <button class="tab-btn" data-strategy="day">⚡ Day Trading</button>
+      <button class="tab-btn active" data-strategy="swing">📊 Swing Trading</button>
+      <button class="tab-btn" data-strategy="long">🛡️ Long-Term</button>
+    </div>
+
+    <div id="cards-container" class="cards">
+      <div class="loading">Loading data...</div>
+    </div>
+
+    <div class="status-bar">
+      <span class="refresh-indicator"></span>
+      Auto-refreshing every 30 seconds | Last update: <span id="last-update">--</span>
+    </div>
+  </div>
+
+  <script>
+    let supportedSymbols = [];
+    let allSignals = []; // Store all strategy signals
+    let currentStrategy = 'swing'; // Start with swing trading (faster load)
+
+    // Fetch list of supported symbols from API
+    async function fetchSymbols() {
+      try {
+        console.log('📡 Fetching symbols from /api/symbols...');
+        const response = await fetch('/api/symbols');
+        const data = await response.json();
+        console.log('📡 API response:', data);
+        if (data.ok && data.symbols && data.symbols.length > 0) {
+          supportedSymbols = data.symbols;
+          console.log(`✅ Loaded ${supportedSymbols.length} symbols:`, supportedSymbols.join(', ').toUpperCase());
+        } else {
+          throw new Error('Invalid response structure');
+        }
+      } catch (error) {
+        console.error('❌ Error fetching symbols:', error);
+        supportedSymbols = ['btc', 'eth']; // Fallback to default
+        console.warn('⚠️ Using fallback symbols:', supportedSymbols.join(', ').toUpperCase());
+      }
+    }
+
+    async function fetchSignal(symbol, strategy = 'swing') {
+      const response = await fetch(`/api/signal?symbol=${symbol}&strategy=${strategy}`);
+      const data = await response.json();
+      return { ...data, strategy };
+    }
+
+    function createCard(data) {
+      const symbol = data.symbol.toUpperCase();
+      const price = data.price ? `$${data.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A';
+      const signal = data.signal || 'HOLD';
+      const rsi = data.lastRSI ? data.lastRSI.toFixed(2) : 'N/A';
+      const emaFast = data.emaFast ? data.emaFast.toFixed(2) : 'N/A';
+      const emaSlow = data.emaSlow ? data.emaSlow.toFixed(2) : 'N/A';
+      const strategy = data.strategy || 'swing';
+      
+      const strategyInfo = {
+        'day': { emoji: '⚡', name: 'Day Trading', class: 'day' },
+        'swing': { emoji: '📊', name: 'Swing Trading', class: 'swing' },
+        'long': { emoji: '🛡️', name: 'Long-Term', class: 'long' }
+      }[strategy];
+
+      return `
+        <div class="card" data-strategy="${strategy}">
+          <div class="strategy-badge ${strategyInfo.class}">${strategyInfo.emoji} ${strategyInfo.name}</div>
+          <div class="card-header">
+            <span class="symbol">${symbol}</span>
+            <span class="signal ${signal}">${signal}</span>
+          </div>
+          <div class="price">${price}</div>
+          <div class="metrics">
+            <div class="metric">
+              <span class="metric-label">RSI (14)</span>
+              <span class="metric-value">${rsi}</span>
+            </div>
+            <div class="metric">
+              <span class="metric-label">EMA Fast</span>
+              <span class="metric-value">${emaFast}</span>
+            </div>
+            <div class="metric">
+              <span class="metric-label">EMA Slow</span>
+              <span class="metric-value">${emaSlow}</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    async function updateDashboard() {
+      try {
+        const container = document.getElementById('cards-container');
+        const loadingText = currentStrategy === 'all' ? 
+          'Loading signals for all strategies...' : 
+          `Loading ${currentStrategy} signals...`;
+        container.innerHTML = `<div class="loading">${loadingText}</div>`;
+        
+        allSignals = [];
+        const strategies = currentStrategy === 'all' ? ['day', 'swing', 'long'] : [currentStrategy];
+        
+        // Fetch all signals in parallel (much faster!)
+        const fetchPromises = [];
+        for (const symbol of supportedSymbols) {
+          for (const strategy of strategies) {
+            fetchPromises.push(
+              fetchSignal(symbol, strategy)
+                .then(data => {
+                  if (data.ok) {
+                    allSignals.push(data);
+                  }
+                })
+                .catch(err => {
+                  console.error(`Error fetching ${symbol} [${strategy}]:`, err);
+                })
+            );
+          }
+        }
+        
+        // Wait for all fetches to complete
+        await Promise.all(fetchPromises);
+        
+        renderCards();
+        document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        document.getElementById('cards-container').innerHTML = 
+          '<div class="error">Error loading data. Please try again.</div>';
+      }
+    }
+
+    function renderCards() {
+      const container = document.getElementById('cards-container');
+      const filteredSignals = currentStrategy === 'all' 
+        ? allSignals 
+        : allSignals.filter(s => s.strategy === currentStrategy);
+      
+      const cards = filteredSignals.map(data => createCard(data)).join('');
+      
+      if (cards) {
+        container.innerHTML = cards;
+      } else {
+        container.innerHTML = '<div class="error">No signal data available</div>';
+      }
+    }
+
+    async function switchStrategy(strategy) {
+      currentStrategy = strategy;
+      
+      // Update active tab
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.strategy === strategy) {
+          btn.classList.add('active');
+        }
+      });
+      
+      // Reload data for the selected strategy
+      await updateDashboard();
+    }
+
+    // Initialize and start
+    async function init() {
+      console.log('🚀 Initializing dashboard...');
+      
+      // Step 1: Fetch symbols first and wait for it
+      await fetchSymbols();
+      
+      // Step 2: Verify symbols loaded
+      if (supportedSymbols.length === 0) {
+        console.error('❌ No symbols loaded, cannot continue');
+        document.getElementById('cards-container').innerHTML = 
+          '<div class="error">Failed to load cryptocurrency list. Please refresh the page.</div>';
+        return;
+      }
+      
+      console.log(`✅ Dashboard ready with ${supportedSymbols.length} symbols`);
+      
+      // Step 3: Load initial data
+      await updateDashboard();
+      
+      // Step 4: Add tab click listeners
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => switchStrategy(btn.dataset.strategy));
+      });
+      
+      // Step 5: Auto-refresh every 30 seconds
+      setInterval(updateDashboard, 30000);
+    }
+
+    init();
+  </script>
+</body>
+</html>
