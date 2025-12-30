@@ -1,0 +1,97 @@
+entrypoint = "index.js"
+modules = ["nodejs-22"]
+hidden = [".config", "package-lock.json"]
+
+[gitHubImport]
+requiredFiles = [".replit", "replit.nix", "package.json", "package-lock.json"]
+
+[nix]
+channel = "stable-24_11"
+
+[deployment]
+run = ["npm", "start"]
+deploymentTarget = "vm"
+ignorePorts = false
+
+[agent]
+expertMode = true
+
+[[ports]]
+localPort = 3000
+externalPort = 80
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+[[ports]]
+localPort = 37621
+externalPort = 4200
+
+[[ports]]
+localPort = 37777
+externalPort = 3002
+
+[[ports]]
+localPort = 38517
+externalPort = 3000
+
+[[ports]]
+localPort = 39317
+externalPort = 8000
+
+[[ports]]
+localPort = 40353
+externalPort = 3003
+
+[[ports]]
+localPort = 43559
+externalPort = 8080
+
+[[ports]]
+localPort = 43695
+externalPort = 6000
+
+[[ports]]
+localPort = 44121
+externalPort = 3001
+
+[[ports]]
+localPort = 44605
+externalPort = 6800
+
+[[ports]]
+localPort = 44925
+externalPort = 5173
+
+[[ports]]
+localPort = 45279
+externalPort = 5000
+
+[[ports]]
+localPort = 46441
+externalPort = 8008
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Crypto Signal Server"
+
+[[workflows.workflow]]
+name = "Crypto Signal Server"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "node index.js"
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"

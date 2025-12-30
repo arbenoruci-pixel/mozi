@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Paper Trading - 3 Strategy Challenges</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+      color: #fafafa;
+      padding: 24px;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 1600px;
+      margin: 0 auto;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, #10b981 0%, #3b82f6 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .subtitle {
+      color: #999;
+      font-size: 1rem;
+      margin-bottom: 16px;
+    }
+    .tabs {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+    }
+    .tab-btn {
+      padding: 12px 24px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.05);
+      color: #999;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+    .tab-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fafafa;
+    }
+    .tab-btn.active {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-color: #667eea;
+    }
+    .tab-btn.day.active {
+      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+      border-color: #f59e0b;
+    }
+    .tab-btn.swing.active {
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+      border-color: #3b82f6;
+    }
+    .tab-btn.long.active {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      border-color: #10b981;
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
+    .strategy-header {
+      text-align: center;
+      margin-bottom: 24px;
+      padding: 20px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .strategy-name {
+      font-size: 1.5rem;
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+    .strategy-name.day { color: #f59e0b; }
+    .strategy-name.swing { color: #3b82f6; }
+    .strategy-name.long { color: #10b981; }
+    .challenge-info {
+      color: #999;
+      font-size: 0.9rem;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .stat-card {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+    }
+    .stat-label {
+      color: #999;
+      font-size: 0.85rem;
+      margin-bottom: 8px;
+    }
+    .stat-value {
+      font-size: 2rem;
+      font-weight: bold;
+      color: #fafafa;
+    }
+    .stat-value.positive {
+      color: #10b981;
+    }
+    .stat-value.negative {
+      color: #ef4444;
+    }
+    .section {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+    .section-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 20px;
+      color: #fbbf24;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th {
+      text-align: left;
+      padding: 12px;
+      border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+      color: #999;
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    td {
+      padding: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    tr:hover {
+      background: rgba(255, 255, 255, 0.03);
+    }
+    .positive {
+      color: #10b981;
+    }
+    .negative {
+      color: #ef4444;
+    }
+    .neutral {
+      color: #999;
+    }
+    .position-badge {
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .position-badge.LONG {
+      background: rgba(16, 185, 129, 0.2);
+      color: #10b981;
+    }
+    .no-data {
+      text-align: center;
+      padding: 40px;
+      color: #666;
+      font-style: italic;
+    }
+    .loading {
+      text-align: center;
+      padding: 20px;
+      color: #999;
+    }
+    .live-badge {
+      display: inline-block;
+      padding: 4px 8px;
+      background: rgba(16, 185, 129, 0.2);
+      border: 1px solid #10b981;
+      border-radius: 8px;
+      color: #10b981;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+    .status-bar {
+      text-align: center;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      font-size: 0.85rem;
+      color: #999;
+      margin-top: 32px;
+    }
+    .refresh-indicator {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      background: #10b981;
+      border-radius: 50%;
+      margin-right: 8px;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>💰 Live Paper Trading Challenges<span class="live-badge">Live</span></h1>
+      <p class="subtitle">$3000 Total Capital | 3 Independent Trading Strategies | 100% Transparent</p>
+    </header>
+
+    <div class="tabs">
+      <button class="tab-btn day active" onclick="switchTab('day')">⚡ Day Trading (1 Week)</button>
+      <button class="tab-btn swing" onclick="switchTab('swing')">📊 Swing Trading (1 Month)</button>
+      <button class="tab-btn long" onclick="switchTab('long')">🛡️ Long-Term (6 Months)</button>
+    </div>
+
+    <!-- Day Trading Tab -->
+    <div id="tab-day" class="tab-content active">
+      <div class="strategy-header">
+        <div class="strategy-name day">⚡ DAY TRADING CHALLENGE</div>
+        <div class="challenge-info">$1,000 Starting Capital | 1 Week Duration | Fast EMA Strategy</div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Portfolio Value</div>
+          <div class="stat-value" id="day-totalValue">$1000.00</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Total Return</div>
+          <div class="stat-value" id="day-totalReturn">$0.00</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Return %</div>
+          <div class="stat-value" id="day-returnPct">0.00%</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Win Rate</div>
+          <div class="stat-value" id="day-winRate">0%</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Total Trades</div>
+          <div class="stat-value" id="day-totalTrades">0</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">💼 Current Positions</div>
+        <div id="day-positions"><div class="loading">Loading positions...</div></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">📈 Recent Trades</div>
+        <div id="day-trades"><div class="loading">Loading trades...</div></div>
+      </div>
+    </div>
+
+    <!-- Swing Trading Tab -->
+    <div id="tab-swing" class="tab-content">
+      <div class="strategy-header">
+        <div class="strategy-name swing">📊 SWING TRADING CHALLENGE</div>
+        <div class="challenge-info">$1,000 Starting Capital | 1 Month Duration | Medium EMA Strategy</div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Portfolio Value</div>
+          <div class="stat-value" id="swing-totalValue">$1000.00</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Total Return</div>
+          <div class="stat-value" id="swing-totalReturn">$0.00</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Return %</div>
+          <div class="stat-value" id="swing-returnPct">0.00%</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Win Rate</div>
+          <div class="stat-value" id="swing-winRate">0%</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Total Trades</div>
+          <div class="stat-value" id="swing-totalTrades">0</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">💼 Current Positions</div>
+        <div id="swing-positions"><div class="loading">Loading positions...</div></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">📈 Recent Trades</div>
+        <div id="swing-trades"><div class="loading">Loading trades...</div></div>
+      </div>
+    </div>
+
+    <!-- Long-Term Trading Tab -->
+    <div id="tab-long" class="tab-content">
+      <div class="strategy-header">
+        <div class="strategy-name long">🛡️ LONG-TERM TRADING CHALLENGE</div>
+        <div class="challenge-info">$1,000 Starting Capital | 6 Months Duration | Long-Term EMA Strategy</div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Portfolio Value</div>
+          <div class="stat-value" id="long-totalValue">$1000.00</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Total Return</div>
+          <div class="stat-value" id="long-totalReturn">$0.00</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Return %</div>
+          <div class="stat-value" id="long-returnPct">0.00%</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Win Rate</div>
+          <div class="stat-value" id="long-winRate">0%</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Total Trades</div>
+          <div class="stat-value" id="long-totalTrades">0</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">💼 Current Positions</div>
+        <div id="long-positions"><div class="loading">Loading positions...</div></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">📈 Recent Trades</div>
+        <div id="long-trades"><div class="loading">Loading trades...</div></div>
+      </div>
+    </div>
+
+    <div class="status-bar">
+      <span class="refresh-indicator"></span>
+      Auto-refreshing every 10 seconds | Last update: <span id="last-update">--</span>
+    </div>
+  </div>
+
+  <script>
+    let currentTab = 'day';
+
+    function switchTab(strategy) {
+      currentTab = strategy;
+      
+      // Update tab buttons
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelector(`.tab-btn.${strategy}`).classList.add('active');
+      
+      // Update tab content
+      document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+      document.getElementById(`tab-${strategy}`).classList.add('active');
+    }
+
+    async function loadStrategyData(strategy) {
+      try {
+        // Load performance
+        const perfRes = await fetch(`/api/paper/performance?strategy=${strategy}`);
+        const perfData = await perfRes.json();
+        
+        if (perfData.ok) {
+          document.getElementById(`${strategy}-totalValue`).textContent = `$${perfData.totalValue.toFixed(2)}`;
+          document.getElementById(`${strategy}-totalValue`).className = 'stat-value ' + (perfData.totalReturn >= 0 ? 'positive' : 'negative');
+          
+          document.getElementById(`${strategy}-totalReturn`).textContent = `$${perfData.totalReturn.toFixed(2)}`;
+          document.getElementById(`${strategy}-totalReturn`).className = 'stat-value ' + (perfData.totalReturn >= 0 ? 'positive' : 'negative');
+          
+          document.getElementById(`${strategy}-returnPct`).textContent = `${perfData.totalReturnPct.toFixed(2)}%`;
+          document.getElementById(`${strategy}-returnPct`).className = 'stat-value ' + (perfData.totalReturnPct >= 0 ? 'positive' : 'negative');
+          
+          document.getElementById(`${strategy}-winRate`).textContent = `${perfData.metrics.winRate.toFixed(1)}%`;
+          document.getElementById(`${strategy}-totalTrades`).textContent = perfData.metrics.totalTrades;
+        }
+
+        // Load positions
+        const posRes = await fetch(`/api/paper/positions?strategy=${strategy}`);
+        const posData = await posRes.json();
+        
+        const posContainer = document.getElementById(`${strategy}-positions`);
+        if (posData.ok && posData.positions.length > 0) {
+          posContainer.innerHTML = `
+            <table>
+              <thead>
+                <tr>
+                  <th>Symbol</th>
+                  <th>Entry Price</th>
+                  <th>Current Price</th>
+                  <th>Unrealized P/L</th>
+                  <th>Stop Loss</th>
+                  <th>Take Profit</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${posData.positions.map(p => {
+                  const pnlClass = p.unrealizedPnL >= 0 ? 'positive' : 'negative';
+                  return `
+                  <tr>
+                    <td><strong>${p.symbol.toUpperCase()}</strong></td>
+                    <td>$${p.entryPrice.toFixed(2)}</td>
+                    <td>${p.currentPrice ? '$' + p.currentPrice.toFixed(2) : '-'}</td>
+                    <td class="${pnlClass}">
+                      ${p.unrealizedPnL !== undefined ? (p.unrealizedPnL >= 0 ? '+' : '') + '$' + p.unrealizedPnL.toFixed(2) + ' (' + (p.unrealizedPnLPct >= 0 ? '+' : '') + p.unrealizedPnLPct.toFixed(2) + '%)' : '-'}
+                    </td>
+                    <td class="negative">$${p.stopLoss.toFixed(2)}</td>
+                    <td class="positive">$${p.takeProfit.toFixed(2)}</td>
+                  </tr>
+                `;
+                }).join('')}
+              </tbody>
+            </table>
+          `;
+        } else {
+          posContainer.innerHTML = '<div class="no-data">No open positions</div>';
+        }
+
+        // Load trades
+        const tradesRes = await fetch(`/api/paper/trades?strategy=${strategy}&limit=20`);
+        const tradesData = await tradesRes.json();
+        
+        const tradesContainer = document.getElementById(`${strategy}-trades`);
+        if (tradesData.ok && tradesData.trades.length > 0) {
+          tradesContainer.innerHTML = `
+            <table>
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Symbol</th>
+                  <th>Action</th>
+                  <th>Entry</th>
+                  <th>Exit</th>
+                  <th>Profit/Loss</th>
+                  <th>Return %</th>
+                  <th>Reason</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${tradesData.trades.map(t => {
+                  if (t.action === 'ENTRY') {
+                    return `
+                      <tr>
+                        <td class="neutral">${new Date(t.timestamp).toLocaleString()}</td>
+                        <td><strong>${t.symbol.toUpperCase()}</strong></td>
+                        <td class="positive">BUY</td>
+                        <td>$${t.price.toFixed(2)}</td>
+                        <td class="neutral">-</td>
+                        <td class="neutral">-</td>
+                        <td class="neutral">-</td>
+                        <td class="neutral">${t.reason}</td>
+                      </tr>
+                    `;
+                  } else {
+                    const profitClass = t.profit >= 0 ? 'positive' : 'negative';
+                    return `
+                      <tr>
+                        <td class="neutral">${new Date(t.timestamp).toLocaleString()}</td>
+                        <td><strong>${t.symbol.toUpperCase()}</strong></td>
+                        <td class="negative">SELL</td>
+                        <td>$${t.entryPrice.toFixed(2)}</td>
+                        <td>$${t.exitPrice.toFixed(2)}</td>
+                        <td class="${profitClass}">${t.profit >= 0 ? '+' : ''}$${t.profit.toFixed(2)}</td>
+                        <td class="${profitClass}">${t.profitPct >= 0 ? '+' : ''}${t.profitPct.toFixed(2)}%</td>
+                        <td class="neutral">${t.reason}</td>
+                      </tr>
+                    `;
+                  }
+                }).join('')}
+              </tbody>
+            </table>
+          `;
+        } else {
+          tradesContainer.innerHTML = '<div class="no-data">No trades yet. Bot is analyzing the market...</div>';
+        }
+
+      } catch (e) {
+        console.error(`Error loading ${strategy} data:`, e);
+      }
+    }
+
+    async function loadAllData() {
+      await Promise.all([
+        loadStrategyData('day'),
+        loadStrategyData('swing'),
+        loadStrategyData('long')
+      ]);
+      
+      document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+    }
+
+    // Initial load
+    loadAllData();
+
+    // Auto-refresh every 10 seconds
+    setInterval(loadAllData, 10000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,68 @@
+Add a 5-day free trial period for all new users who join via Telegram.
+
+1) Trial settings
+- In index.js (or the main bot handler), define:
+  const TRIAL_DAYS = 5; // length of free trial
+  const TRIAL_PLAN = "trial";
+
+2) When a user sends /start (with or without referral code):
+- If the user does not already exist in users.json, create a new record:
+  {
+    chat_id,
+    username,
+    first_name,
+    plan: TRIAL_PLAN,
+    referred_by: <partner code if provided>,
+    created_at: nowISO(),
+    expires_at: addDays(now, TRIAL_DAYS)
+  }
+- Reply:
+  “👋 Welcome to Arben’s Crypto Signals!
+   You now have a FREE 5-day trial.
+   You’ll receive live BUY/SELL alerts until your trial expires on <expiry_date>.
+   After that, visit the shop or contact support to extend your access.”
+
+3) On every signal broadcast:
+- Only send to users where expires_at > now (same as active plan logic).
+
+4) On expiry:
+- When a user’s trial expires, send an automated Telegram message once:
+  “⏳ Your free trial has ended.
+   Renew at the shop or contact us to keep receiving crypto alerts.”
+  (Add a flag user.trial_notified=true to avoid repeat messages.)
+
+5) /status command:
+- Show:
+  - Plan name (e.g. “trial” or “basic”)
+  - Expiry date (formatted)
+  - Remaining days
+  - If trial: add line “You’re in a free trial that ends on <date>.”
+
+6) Admin/Partner actions:
+- Existing /api/user/activate still upgrades trial users to paid plans.
+- When activated, overwrite plan/expires_at normally.
+
+7) Utility helpers:
+- Add addDays(dateISO, n) helper (returns new ISO date).
+- Ensure expired users are automatically excluded from active alerts.
+
+8) Optional config:
+- Store TRIAL_DAYS in process.env.TRIAL_DAYS if present (override default 5).
+- Log in console whenever a new trial is created:
+  `[Trial] Started 5-day trial for chat_id=<id> (expires <date>)`
+
+9) Docs:
+- Update README.md and ALERTS.md:
+  • "Trial Mode" section explaining 5-day auto trial for new users.
+  • How to convert trial → paid via /api/user/activate.
+  • How to change trial length (edit TRIAL_DAYS).
+  • Reminder message format.
+
+10) Verify + deploy:
+- Test:
+  • New user presses Start → gets trial message with expiry.
+  • /status shows correct trial info.
+  • After expiry, receives end-of-trial message.
+  • /api/users?active=1 only lists unexpired users.
+  • Activation upgrades correctly.
+- Keep all existing partner/referral, alert, and dashboard features working.
